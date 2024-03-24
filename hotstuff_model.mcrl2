@@ -1,0 +1,128 @@
+sort
+    MessageType = struct newView ? isNewView
+                        | prepare ? isPrepare
+                        | preCommit ? isPreCommit
+                        | commit ? isCommit
+                        | decide ? isDecide; 
+
+    Message = struct createMessage(type: MessageType, viewNumber: Nat);
+
+map
+    matchingMessage: Message # MessageType # Nat -> Bool;
+    getMessageType: Message -> MessageType;
+    getMessageView: Message -> Nat;
+    
+var
+    messageToCheck: Message;
+    t: MessageType;
+    viewNum: Nat;
+
+eqn
+    %%%
+    % Function to check if the message matches the required type and view
+    %                                                                                                                  
+    % @param messageToCheck      the message that needs to be checked
+    % @param t                   the expected type of the message
+    % @param viewNum             the expected view number of the message
+    %
+    % @return boolean value representing whether the message matches the details
+    %
+    %%%
+    matchingMessage(messageToCheck, t, viewNum) =
+        (t == type(messageToCheck)) &&
+        (viewNum == viewNumber(messageToCheck));
+
+act
+    % Actions associated with NEW-VIEW
+    NewView;
+    SendNewView;
+    ReceiveNewView;
+
+    % Actions associated with broadcasting a message to all replicas 
+    Broadcast;
+    SendBroadcast;
+    ReceiveBroadcast;
+
+proc
+    %%%
+    % Process to generate initial NEW-VIEW messages
+    %                                                                                                                  
+    % @param countInit           initialize with 0, keeps track of the total NEW-VIEW messages sent out
+    % @param nInit               total number of NEW-VIEW messages to send out (usually the total number of replicas)
+    %
+    %%%
+    Initialization(countInit: Nat, nInit: Nat) =
+        % Special NEW-VIEW messages from view 0
+        (countInit < nInit) -> SendNewView . Initialization(countInit + 1, nInit);
+
+    %%%%
+    % Process for Leader replica in the Prepare phase
+    %
+    % @param n                   total number of replicas
+    % @param f                   number of faulty replicas
+    % @param newViewCount        initialize with 0, keeps track of the total NEW-VIEW messages received
+    %
+    %%%%
+    LeaderPrepare(n: Nat, f: Nat, newViewCount: Nat) = 
+        % Wait for (n - f) NEW-VIEW messages
+        (newViewCount < (n - f)) ->
+            ReceiveNewView . LeaderPrepare(n, f, newViewCount + 1)
+        +
+        % Retrieve highest QC, create the proposed node to extend the tree, broadcast the proposal with the associated QC to all replicas
+        % TODO: implement QC
+        % TODO: implement the tree structure
+        (newViewCount >= (n - f)) ->
+            Broadcast . LeaderPrepare(n, f, 0);
+
+    %%%%
+    % Process for non-Leader replicas in the Prepare phase
+    %
+    %%%%
+    NonLeaderPrepare(id: Nat) =
+        delta;
+
+    %%%%
+    % Process for Leader replica in the PreCommit phase
+    %
+    %%%%
+    % LeaderPreCommit() = 
+
+    %%%%
+    % Process for non-Leader replicas in the PreCommit phase
+    %
+    %%%%
+    % NonLeaderPreCommit(id: Nat) = 
+    %     Receive
+
+    %%%%
+    % Process for Leader replica in the Commit phase
+    %
+    %%%%
+    % LeaderCommit() =
+
+    %%%%
+    % Process for non-Leader replicas in the Commit phase
+    %
+    %%%%
+    % NonLeaderCommit() =
+
+    %%%%
+    % Process for the Leader replica in the Decide phase
+    %
+    %%%%
+    % LeaderDecide() =
+
+    %%%%
+    % Process for non-Leader replicas in the Decide phase
+    %
+    %%%%
+    % NonLeaderDecide() =
+
+init
+    allow(
+        {NewView, Broadcast},
+        comm({
+        ReceiveNewView|SendNewView -> NewView
+        },
+        Initialization(0, 3) || LeaderPrepare(3, 0, 0) || NonLeaderPrepare(1) || NonLeaderPrepare(2) || NonLeaderPrepare(3)
+    ));
