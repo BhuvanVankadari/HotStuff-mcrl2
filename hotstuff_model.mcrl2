@@ -69,6 +69,7 @@ proc
             ReceiveNewView . LeaderPrepare(n, f, newViewCount + 1)
         +
         % Retrieve highest QC, create the proposed node to extend the tree, broadcast the proposal with the associated QC to all replicas
+        % TODO: implement Broadcast
         % TODO: implement QC
         % TODO: implement the tree structure
         (newViewCount >= (n - f)) ->
@@ -79,44 +80,52 @@ proc
     %
     %%%%
     NonLeaderPrepare(id: Nat) =
+        % TODO: implement receiving broadcasted message
+        % TODO: implement proposed node check
+        % TODO: implement voting for a message with a partial signature
         delta;
 
     %%%%
     % Process for Leader replica in the PreCommit phase
     %
     %%%%
-    % LeaderPreCommit() = 
+    LeaderPreCommit =
+        delta;
 
     %%%%
     % Process for non-Leader replicas in the PreCommit phase
     %
     %%%%
-    % NonLeaderPreCommit(id: Nat) = 
-    %     Receive
+    NonLeaderPreCommit(id: Nat) =
+        delta;
 
     %%%%
     % Process for Leader replica in the Commit phase
     %
     %%%%
-    % LeaderCommit() =
+    LeaderCommit =
+        delta;
 
     %%%%
     % Process for non-Leader replicas in the Commit phase
     %
     %%%%
-    % NonLeaderCommit() =
+    NonLeaderCommit =
+        delta;
 
     %%%%
     % Process for the Leader replica in the Decide phase
     %
     %%%%
-    % LeaderDecide() =
+    LeaderDecide =
+        delta;
 
     %%%%
     % Process for non-Leader replicas in the Decide phase
     %
     %%%%
-    % NonLeaderDecide() =
+    NonLeaderDecide =
+        delta;
 
 init
     allow(
