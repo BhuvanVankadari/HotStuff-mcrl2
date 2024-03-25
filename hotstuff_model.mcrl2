@@ -34,14 +34,10 @@ eqn
 
 act
     % Actions associated with NEW-VIEW
-    NewView;
-    SendNewView;
-    ReceiveNewView;
+    SendNewView, ReceiveNewView, NewView;
 
     % Actions associated with broadcasting a message to all replicas 
-    Broadcast;
-    SendBroadcast;
-    ReceiveBroadcast;
+    SendBroadcast, ReceiveBroadcast, Broadcast: Message;
 
 proc
     %%%
@@ -63,27 +59,33 @@ proc
     % @param newViewCount        initialize with 0, keeps track of the total NEW-VIEW messages received
     %
     %%%%
-    LeaderPrepare(n: Nat, f: Nat, newViewCount: Nat) = 
+    LeaderPrepare(n: Nat, f: Nat, newViewCount: Nat, broadcastCount: Nat) = 
         % Wait for (n - f) NEW-VIEW messages
         (newViewCount < (n - f)) ->
-            ReceiveNewView . LeaderPrepare(n, f, newViewCount + 1)
+            ReceiveNewView . LeaderPrepare(n, f, newViewCount + 1, 0)
         +
         % Retrieve highest QC, create the proposed node to extend the tree, broadcast the proposal with the associated QC to all replicas
-        % TODO: implement Broadcast
+        % TODO: implement Broadcast // DONE
         % TODO: implement QC
         % TODO: implement the tree structure
         (newViewCount >= (n - f)) ->
-            Broadcast . LeaderPrepare(n, f, 0);
+            (
+                (broadcastCount < (n - 1)) ->
+                    SendBroadcast(createMessage(prepare, 0)) . LeaderPrepare(n, f, newViewCount, broadcastCount + 1)
+                +
+                (broadcastCount >= (n - 1)) ->
+                    SendBroadcast(createMessage(prepare, 0)) . LeaderPreCommit
+            );
 
     %%%%
     % Process for non-Leader replicas in the Prepare phase
     %
     %%%%
     NonLeaderPrepare(id: Nat) =
-        % TODO: implement receiving broadcasted message
+        % TODO: implement receiving broadcasted message // DONE
         % TODO: implement proposed node check
         % TODO: implement voting for a message with a partial signature
-        delta;
+        sum x: Message.ReceiveBroadcast(x) . delta;
 
     %%%%
     % Process for Leader replica in the PreCommit phase
@@ -131,7 +133,8 @@ init
     allow(
         {NewView, Broadcast},
         comm({
-        ReceiveNewView|SendNewView -> NewView
+        ReceiveNewView | SendNewView -> NewView,
+        SendBroadcast | ReceiveBroadcast -> Broadcast
         },
-        Initialization(0, 3) || LeaderPrepare(3, 0, 0) || NonLeaderPrepare(1) || NonLeaderPrepare(2) || NonLeaderPrepare(3)
+        Initialization(0, 3) || LeaderPrepare(3, 0, 0, 0) || NonLeaderPrepare(1) || NonLeaderPrepare(2) || NonLeaderPrepare(3)
     ));
