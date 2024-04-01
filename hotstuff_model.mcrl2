@@ -1,21 +1,35 @@
 sort
+    % Types of messages that can be generated within the protocol
     MessageType = struct newView ? isNewView
                         | prepare ? isPrepare
                         | preCommit ? isPreCommit
                         | commit ? isCommit
                         | decide ? isDecide; 
 
-    Message = struct createMessage(type: MessageType, viewNumber: Nat);
+    % Data structure for the quorum certificate
+    QuorumCertificate = struct createQC(typeQC: MessageType, viewNumberQC: Int, nodeQC: Node, signatureCountQC: Nat);
+
+    % Data structure for the tree within which a consensus is being reached upon
+    Node = struct Root | createNode(parentNode: Node);
+
+    % Data structure for the message
+    Message = struct createMessage(typeMsg: MessageType, viewNumberMsg: Int, quorumCertificateMsg: QuorumCertificate);
 
 map
-    matchingMessage: Message # MessageType # Nat -> Bool;
-    getMessageType: Message -> MessageType;
-    getMessageView: Message -> Nat;
+    matchingMessage: Message # MessageType # Int -> Bool;
+
+    voteMessage: QuorumCertificate -> QuorumCertificate;
+
+    decrement: Int -> Int;
     
 var
+    % Parameters associated with the matchingMessage() function
     messageToCheck: Message;
     t: MessageType;
-    viewNum: Nat;
+    viewNum: Int;
+
+    % Parameter associated with the decrement() function
+    numToDecrement: Int;
 
 eqn
     %%%
@@ -29,15 +43,28 @@ eqn
     %
     %%%
     matchingMessage(messageToCheck, t, viewNum) =
-        (t == type(messageToCheck)) &&
-        (viewNum == viewNumber(messageToCheck));
+        (t == typeMsg(messageToCheck)) &&
+        (viewNum == viewNumberMsg(messageToCheck));
+
+    %%%
+    % Function to decrement number if > 0
+    %                                                                                                                  
+    % @param numToDecrement      the number to decrement
+    %
+    % @return decremented number
+    %
+    %%%
+    decrement(numToDecrement) = numToDecrement - 1;
 
 act
     % Actions associated with NEW-VIEW
-    SendNewView, ReceiveNewView, NewView;
+    SendNewView, ReceiveNewView, NewView: Message;
 
     % Actions associated with broadcasting a message to all replicas 
     SendBroadcast, ReceiveBroadcast, Broadcast: Message;
+
+    % Actions associated with voting
+    SendVote, ReceiveVote, Vote;
 
 proc
     %%%
@@ -49,32 +76,42 @@ proc
     %%%
     Initialization(countInit: Nat, nInit: Nat) =
         % Special NEW-VIEW messages from view 0
-        (countInit < nInit) -> SendNewView . Initialization(countInit + 1, nInit);
+        (countInit < nInit) -> SendNewView(createMessage(newView, 0, createQC(prepare, 0, Root, 0)))
+                                . Initialization(countInit + 1, nInit)
+        +
+        delta;
 
     %%%%
     % Process for Leader replica in the Prepare phase
     %
     % @param n                   total number of replicas
     % @param f                   number of faulty replicas
+    % @param currentView         the current view of the algorithm
     % @param newViewCount        initialize with 0, keeps track of the total NEW-VIEW messages received
+    % @param broadcastCount      initialize with 0, keeps track of total messages sent (aims to broadcast)
     %
     %%%%
-    LeaderPrepare(n: Nat, f: Nat, newViewCount: Nat, broadcastCount: Nat) = 
+    LeaderPrepare(n: Nat, f: Nat, currentView: Int, newViewCount: Nat, broadcastCount: Nat, messagesSet: Set(Message)) = 
         % Wait for (n - f) NEW-VIEW messages
         (newViewCount < (n - f)) ->
-            ReceiveNewView . LeaderPrepare(n, f, newViewCount + 1, 0)
+            sum receivedNewViewMessage: Message.ReceiveNewView(receivedNewViewMessage) . 
+            (
+                (matchingMessage(receivedNewViewMessage, newView, currentView - 1)) -> 
+                LeaderPrepare(n, f, currentView, newViewCount + 1, 0, {})
+            )
         +
         % Retrieve highest QC, create the proposed node to extend the tree, broadcast the proposal with the associated QC to all replicas
-        % TODO: implement Broadcast // DONE
+        % TODO: implement Broadcast with Message passing// DONE
         % TODO: implement QC
         % TODO: implement the tree structure
         (newViewCount >= (n - f)) ->
             (
                 (broadcastCount < (n - 1)) ->
-                    SendBroadcast(createMessage(prepare, 0)) . LeaderPrepare(n, f, newViewCount, broadcastCount + 1)
+                    SendBroadcast(createMessage(prepare, 0, createQC(prepare, 0, Root, 0))) . LeaderPrepare(n, f, currentView, newViewCount, broadcastCount + 1, {})
                 +
                 (broadcastCount >= (n - 1)) ->
-                    SendBroadcast(createMessage(prepare, 0)) . LeaderPreCommit
+                    % TODO: add a QC to the message creation
+                    SendBroadcast(createMessage(prepare, 0, createQC(prepare, 0, Root, 0))) . LeaderPreCommit(n, f, currentView, 0)
             );
 
     %%%%
@@ -85,14 +122,26 @@ proc
         % TODO: implement receiving broadcasted message // DONE
         % TODO: implement proposed node check
         % TODO: implement voting for a message with a partial signature
-        sum x: Message.ReceiveBroadcast(x) . delta;
+        sum x: Message.ReceiveBroadcast(x) . SendVote;
 
     %%%%
     % Process for Leader replica in the PreCommit phase
     %
+    % @param n                   total number of replicas
+    % @param f                   number of faulty replicas
+    % @param currentView         the current view of the algorithm
+    % @param voteCount           initialize with 0, keeps track of the total votes received
+    %
     %%%%
-    LeaderPreCommit =
-        delta;
+    LeaderPreCommit(n: Nat, f: Nat, currentView: Int, voteCount: Nat) =
+        (voteCount < (n - f)) ->
+            ReceiveVote . LeaderPreCommit(n, f, currentView, voteCount + 1)
+        +
+        % Prepare the Quorum Certificate, broadcast it to all the replicas
+        % TODO: prepareQC
+        % TODO: Broadcast to all replicas
+        (voteCount >= (n - f)) ->
+            delta;
 
     %%%%
     % Process for non-Leader replicas in the PreCommit phase
@@ -131,10 +180,11 @@ proc
 
 init
     allow(
-        {NewView, Broadcast},
+        {NewView, Broadcast, Vote},
         comm({
         ReceiveNewView | SendNewView -> NewView,
-        SendBroadcast | ReceiveBroadcast -> Broadcast
+        SendBroadcast | ReceiveBroadcast -> Broadcast,
+        SendVote | ReceiveVote -> Vote
         },
-        Initialization(0, 3) || LeaderPrepare(3, 0, 0, 0) || NonLeaderPrepare(1) || NonLeaderPrepare(2) || NonLeaderPrepare(3)
+        Initialization(0, 3) || LeaderPrepare(3, 0, 1, 0, 0, {}) || NonLeaderPrepare(1) || NonLeaderPrepare(2) || NonLeaderPrepare(3)
     ));
