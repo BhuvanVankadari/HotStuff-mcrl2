@@ -135,7 +135,7 @@ proc
             (
                 (matchingMessage(receivedNewViewMessage, newView, currentView - 1)) -> 
                     (
-                        ((quorumCertificateMsg(receivedNewViewMessage)) > viewNumberQC(quorumCertificateMsg(highQCMessage))) ->
+                        (viewNumberQC(quorumCertificateMsg(receivedNewViewMessage)) > viewNumberQC(quorumCertificateMsg(highQCMessage))) ->
                             LeaderPrepare(n, f, currentView, newViewCount + 1, receivedNewViewMessage)
                         +
                         LeaderPrepare(n, f, currentView, newViewCount + 1, highQCMessage)
