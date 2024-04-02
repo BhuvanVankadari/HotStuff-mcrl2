@@ -7,7 +7,7 @@ sort
                         | decide ? isDecide; 
 
     % Data structure for the quorum certificate
-    QuorumCertificate = struct createQC(typeQC: MessageType, viewNumberQC: Int, nodeQC: Node, signatureCountQC: Nat);
+    QuorumCertificate = struct NullQC | createQC(typeQC: MessageType, viewNumberQC: Int, nodeQC: Node);
 
     % Data structure for the tree within which a consensus is being reached upon
     Node = struct NullNode | Root | createNode(parentNode: Node);
@@ -18,28 +18,48 @@ sort
 map
     matchingMessage: Message # MessageType # Int -> Bool;
 
-    voteMessage: QuorumCertificate -> QuorumCertificate;
+    matchingQC: QuorumCertificate # MessageType # Int -> Bool;
     
 var
     % Parameters associated with the matchingMessage() function
     messageToCheck: Message;
-    t: MessageType;
-    viewNum: Int;
+    typeMsgVar: MessageType;
+    viewNumMsgVar: Int;
+
+    % Parameters associated with the matchingQC() function
+    QCToCheck: QuorumCertificate;
+    typeQCVar: MessageType;
+    viewNumQCVar: Int;
 
 eqn
     %%%
     % Function to check if the message matches the required type and view
     %                                                                                                                  
     % @param messageToCheck      the message that needs to be checked
-    % @param t                   the expected type of the message
-    % @param viewNum             the expected view number of the message
+    % @param typeMsgVar          the expected type of the message
+    % @param viewNumMsgVar       the expected view number of the message
     %
     % @return boolean value representing whether the message matches the details
     %
     %%%
-    matchingMessage(messageToCheck, t, viewNum) =
-        (t == typeMsg(messageToCheck)) &&
-        (viewNum == viewNumberMsg(messageToCheck));
+    matchingMessage(messageToCheck, typeMsgVar, viewNumMsgVar) =
+        (typeMsgVar == typeMsg(messageToCheck)) &&
+        (viewNumMsgVar == viewNumberMsg(messageToCheck));
+
+    %%%
+    % Function to check if the QC matches the required type and view
+    %                                                                                                                  
+    % @param QCToCheck           the QC that needs to be checked
+    % @param typeQCVar           the expected type of the QC
+    % @param viewNumQCVar        the expected view number of the QC
+    %
+    % @return boolean value representing whether the QC matches the details
+    %
+    %%%
+    (QCToCheck == NullQC) -> matchingQC(QCToCheck, typeQCVar, viewNumQCVar) = false;
+    matchingQC(QCToCheck, typeQCVar, viewNumQCVar) =
+        (typeQCVar == typeQC(QCToCheck)) &&
+        (viewNumQCVar == viewNumberQC(QCToCheck));
 
 act
     % Actions associated with NEW-VIEW
@@ -50,13 +70,40 @@ act
     SendBroadcastRequest, ReceiveBroadcastRequest, InvokeBroadcastUtility: Message;
 
     % Actions associated with voting
-    SendVote, ReceiveVote, Vote;
+    SendVote, ReceiveVote, Vote: Message;
 
     % Actions associated with creating a leaf and sending to the requestor
     SendNode, ReceiveNode, CreatingLeaf: Node;
     InitiateProposalRequest, ReceiveProposalRequest, InvokeCreateLeaf: Node;
 
 proc
+    %%%%
+    % Process to create a leaf
+    %
+    %%%%
+    ProposalGenerator =
+        sum proposedNode: Node.ReceiveProposalRequest(proposedNode) . SendNode(createNode(proposedNode)).delta;
+
+    %%%%
+    % Process to serve as a broadcast utility
+    %
+    % @param broadcastCount      initialize with -1 (waiting state), keeps count of total broadcasts sent out once invoked
+    % @param broadcastMessage    initialization value is ignored; message to be broadcasted
+    % @param n                   initialize with total replicas, total number of broadcasts
+    %
+    %%%%
+    BroadcastUtility(broadcastCount: Int, broadcastMessage: Message, n: Nat) =
+        (broadcastCount == -1) ->
+            sum messageToBroadcast: Message.ReceiveBroadcastRequest(messageToBroadcast) . BroadcastUtility(0, messageToBroadcast, n)
+        +
+        (
+            (broadcastCount >= 0 && broadcastCount < n - 1) ->
+                SendBroadcast(broadcastMessage) . BroadcastUtility(broadcastCount + 1, broadcastMessage, n)
+            +
+            (broadcastCount >= n - 1) ->
+                SendBroadcast(broadcastMessage) . BroadcastUtility(-1, broadcastMessage, n)
+        );
+
     %%%
     % Process to generate initial NEW-VIEW messages
     %                                                                                                                  
@@ -66,7 +113,7 @@ proc
     %%%
     Initialization(countInit: Nat, nInit: Nat) =
         % Special NEW-VIEW messages from view 0
-        (countInit < nInit) -> SendNewView(createMessage(newView, 0, Root, createQC(prepare, 0, Root, 0)))
+        (countInit < nInit) -> SendNewView(createMessage(newView, 0, Root, createQC(prepare, 0, Root)))
                                 . Initialization(countInit + 1, nInit)
         +
         delta;
@@ -101,44 +148,21 @@ proc
             sum currentProposal: Node.ReceiveNode(currentProposal)
             .
             SendBroadcastRequest(createMessage(prepare, currentView, currentProposal, quorumCertificateMsg(highQCMessage))) . LeaderPreCommit(n, f, currentView, 0);
-    
-    %%%%
-    % Process to create a leaf
-    %
-    %%%%
-    ProposalGenerator =
-        sum proposedNode: Node.ReceiveProposalRequest(proposedNode) . SendNode(createNode(proposedNode)).delta;
-
-    %%%%
-    % Process to serve as a broadcast utility
-    %
-    % @param broadcastCount      initialize with -1 (waiting state), keeps count of total broadcasts sent out once invoked
-    % @param broadcastMessage    initialization value is ignored; message to be broadcasted
-    % @param n                   initialize with total replicas, total number of broadcasts
-    %
-    %%%%
-    BroadcastUtility(broadcastCount: Int, broadcastMessage: Message, n: Nat) =
-        (broadcastCount == -1) ->
-            sum messageToBroadcast: Message.ReceiveBroadcastRequest(messageToBroadcast) . BroadcastUtility(0, messageToBroadcast, n)
-        +
-        (
-            (broadcastCount >= 0 && broadcastCount < n - 1) ->
-                SendBroadcast(broadcastMessage) . BroadcastUtility(broadcastCount + 1, broadcastMessage, n)
-            +
-            (broadcastCount >= n - 1) ->
-                SendBroadcast(broadcastMessage) . BroadcastUtility(-1, broadcastMessage, n)
-        );
-
 
     %%%%
     % Process for non-Leader replicas in the Prepare phase
     %
     %%%%
-    NonLeaderPrepare(id: Nat) =
-        % TODO: implement receiving broadcasted message // DONE
-        % TODO: implement proposed node check
+    NonLeaderPrepare(currentView: Int) =
         % TODO: implement voting for a message with a partial signature
-        sum x: Message.ReceiveBroadcast(x) . SendVote;
+        sum receivedProposal: Message.ReceiveBroadcast(receivedProposal) . 
+        (
+            % TODO: implement proposed node check part 2
+            (parentNode(nodeMsg(receivedProposal)) == nodeQC(quorumCertificateMsg(receivedProposal))) ->
+                SendVote(createMessage(prepare, currentView, nodeMsg(receivedProposal), NullQC))
+                .
+                NonLeaderPreCommit(currentView)
+        );
 
     %%%%
     % Process for Leader replica in the PreCommit phase
@@ -150,28 +174,63 @@ proc
     %
     %%%%
     LeaderPreCommit(n: Nat, f: Nat, currentView: Int, voteCount: Nat) =
-        (voteCount < (n - f)) ->
-            ReceiveVote . LeaderPreCommit(n, f, currentView, voteCount + 1)
+        (voteCount < (n - f - 1)) ->
+            sum receivedVote: Message.ReceiveVote(receivedVote)
+            .
+            (
+                (matchingMessage(receivedVote, prepare, currentView)) ->
+                    LeaderPreCommit(n, f, currentView, voteCount + 1)
+            )
         +
         % Prepare the Quorum Certificate, broadcast it to all the replicas
         % TODO: prepareQC
         % TODO: Broadcast to all replicas
-        (voteCount >= (n - f)) ->
-            delta;
+        (voteCount >= (n - f - 1)) ->
+            sum receivedVote: Message.ReceiveVote(receivedVote)
+            .
+            (matchingMessage(receivedVote, prepare, currentView)) ->
+            (
+                SendBroadcastRequest(createMessage(preCommit, currentView, NullNode, createQC(prepare, currentView, nodeMsg(receivedVote))))
+                .
+                LeaderCommit(n, f, currentView, 0)
+            );
 
     %%%%
     % Process for non-Leader replicas in the PreCommit phase
     %
     %%%%
-    NonLeaderPreCommit(id: Nat) =
-        delta;
+    NonLeaderPreCommit(currentView: Int) =
+        sum receivedQCMsg: Message.ReceiveBroadcast(receivedQCMsg) . 
+        (
+            (matchingQC(quorumCertificateMsg(receivedQCMsg), prepare, currentView)) ->
+                SendVote(createMessage(preCommit, currentView, nodeQC(quorumCertificateMsg(receivedQCMsg)), NullQC))
+                .
+                NonLeaderCommit
+        );
 
     %%%%
     % Process for Leader replica in the Commit phase
     %
     %%%%
-    LeaderCommit =
-        delta;
+    LeaderCommit(n: Nat, f: Nat, currentView: Int, voteCount: Nat) =
+        (voteCount < (n - f - 1)) ->
+            sum receivedVote: Message.ReceiveVote(receivedVote)
+            .
+            (
+                (matchingMessage(receivedVote, preCommit, currentView)) ->
+                    LeaderCommit(n, f, currentView, voteCount + 1)
+            )
+        +
+        % Prepare the Quorum Certificate, broadcast it to all the replicas
+        (voteCount >= (n - f - 1)) ->
+            sum receivedVote: Message.ReceiveVote(receivedVote)
+            .
+            (matchingMessage(receivedVote, preCommit, currentView)) ->
+            (
+                SendBroadcastRequest(createMessage(commit, currentView, NullNode, createQC(preCommit, currentView, nodeMsg(receivedVote))))
+                .
+                LeaderDecide
+            );
 
     %%%%
     % Process for non-Leader replicas in the Commit phase
@@ -206,9 +265,9 @@ init
         SendBroadcastRequest | ReceiveBroadcastRequest -> InvokeBroadcastUtility
         },
         % Utils
-        Initialization(0, 2) || ProposalGenerator || BroadcastUtility(-1, createMessage(newView, 0, NullNode, createQC(prepare, 0, NullNode, 0)), 2)
+        Initialization(0, 2) || ProposalGenerator || BroadcastUtility(-1, createMessage(newView, 0, NullNode, createQC(prepare, 0, NullNode)), 2)
             % Leader instantiation
-            || LeaderPrepare(2, 0, 1, 0, createMessage(newView, 0, Root, createQC(prepare, 0, Root, 0))) 
+            || LeaderPrepare(2, 0, 1, 0, createMessage(newView, 0, Root, createQC(prepare, 0, Root))) 
             % Non-Leader instantiation
-            || NonLeaderPrepare(1) || NonLeaderPrepare(2)
+            || NonLeaderPrepare(0) || NonLeaderPrepare(0)
     ));
