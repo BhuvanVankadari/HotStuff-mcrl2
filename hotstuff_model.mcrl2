@@ -154,10 +154,8 @@ proc
     %
     %%%%
     NonLeaderPrepare(currentView: Int) =
-        % TODO: implement voting for a message with a partial signature
         sum receivedProposal: Message.ReceiveBroadcast(receivedProposal) . 
         (
-            % TODO: implement proposed node check part 2
             (parentNode(nodeMsg(receivedProposal)) == nodeQC(quorumCertificateMsg(receivedProposal))) ->
                 SendVote(createMessage(prepare, currentView, nodeMsg(receivedProposal), NullQC))
                 .
@@ -205,7 +203,7 @@ proc
             (matchingQC(quorumCertificateMsg(receivedQCMsg), prepare, currentView)) ->
                 SendVote(createMessage(preCommit, currentView, nodeQC(quorumCertificateMsg(receivedQCMsg)), NullQC))
                 .
-                NonLeaderCommit
+                NonLeaderCommit(currentView)
         );
 
     %%%%
@@ -229,29 +227,66 @@ proc
             (
                 SendBroadcastRequest(createMessage(commit, currentView, NullNode, createQC(preCommit, currentView, nodeMsg(receivedVote))))
                 .
-                LeaderDecide
+                LeaderDecide(n, f, currentView, 0)
             );
 
     %%%%
     % Process for non-Leader replicas in the Commit phase
     %
     %%%%
-    NonLeaderCommit =
-        delta;
+    NonLeaderCommit(currentView: Int) =
+        sum receivedQCMsg: Message.ReceiveBroadcast(receivedQCMsg) . 
+        (
+            (matchingQC(quorumCertificateMsg(receivedQCMsg), preCommit, currentView)) ->
+                SendVote(createMessage(commit, currentView, nodeQC(quorumCertificateMsg(receivedQCMsg)), NullQC))
+                .
+                NonLeaderDecide(currentView)
+        );
 
     %%%%
     % Process for the Leader replica in the Decide phase
     %
     %%%%
-    LeaderDecide =
-        delta;
+    LeaderDecide(n: Nat, f: Nat, currentView: Int, voteCount: Nat) =
+        (voteCount < (n - f - 1)) ->
+            sum receivedVote: Message.ReceiveVote(receivedVote)
+            .
+            (
+                (matchingMessage(receivedVote, commit, currentView)) ->
+                    LeaderDecide(n, f, currentView, voteCount + 1)
+            )
+        +
+        % Prepare the Quorum Certificate, broadcast it to all the replicas
+        (voteCount >= (n - f - 1)) ->
+            sum receivedVote: Message.ReceiveVote(receivedVote)
+            .
+            (matchingMessage(receivedVote, commit, currentView)) ->
+            (
+                SendBroadcastRequest(createMessage(decide, currentView, NullNode, createQC(commit, currentView, nodeMsg(receivedVote))))
+                .
+                (currentView <= 20) ->
+                (
+                    LeaderPrepare(n, f, currentView + 1, 0, createMessage(newView, 0, Root, createQC(prepare, 0, Root)))
+                )
+                <> delta
+
+            );
 
     %%%%
     % Process for non-Leader replicas in the Decide phase
     %
     %%%%
-    NonLeaderDecide =
-        delta;
+    NonLeaderDecide(currentView: Int) =
+        sum receivedQCMsg: Message.ReceiveBroadcast(receivedQCMsg) . 
+        (
+            (matchingQC(quorumCertificateMsg(receivedQCMsg), commit, currentView)) ->
+                % Implicit assumption of execution of client command
+                (currentView <= 20) ->
+                (
+                    NonLeaderPrepare(currentView + 1)
+                )
+                <> delta
+        );
 
 init
     allow(
