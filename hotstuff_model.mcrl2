@@ -135,7 +135,7 @@ proc
             (
                 (matchingMessage(receivedNewViewMessage, newView, currentView - 1)) -> 
                     (
-                        (viewNumberQC(quorumCertificateMsg(receivedNewViewMessage)) > viewNumberQC(quorumCertificateMsg(highQCMessage))) ->
+                        ((quorumCertificateMsg(receivedNewViewMessage)) > viewNumberQC(quorumCertificateMsg(highQCMessage))) ->
                             LeaderPrepare(n, f, currentView, newViewCount + 1, receivedNewViewMessage)
                         +
                         LeaderPrepare(n, f, currentView, newViewCount + 1, highQCMessage)
@@ -151,6 +151,8 @@ proc
 
     %%%%
     % Process for non-Leader replicas in the Prepare phase
+    %
+    % @param currentView         the current view of the algorithm
     %
     %%%%
     NonLeaderPrepare(currentView: Int) =
@@ -181,8 +183,6 @@ proc
             )
         +
         % Prepare the Quorum Certificate, broadcast it to all the replicas
-        % TODO: prepareQC
-        % TODO: Broadcast to all replicas
         (voteCount >= (n - f - 1)) ->
             sum receivedVote: Message.ReceiveVote(receivedVote)
             .
@@ -196,6 +196,8 @@ proc
     %%%%
     % Process for non-Leader replicas in the PreCommit phase
     %
+    % @param currentView         the current view of the algorithm
+    %
     %%%%
     NonLeaderPreCommit(currentView: Int) =
         sum receivedQCMsg: Message.ReceiveBroadcast(receivedQCMsg) . 
@@ -208,6 +210,11 @@ proc
 
     %%%%
     % Process for Leader replica in the Commit phase
+    %
+    % @param n                   total number of replicas
+    % @param f                   number of faulty replicas
+    % @param currentView         the current view of the algorithm
+    % @param voteCount           initialize with 0, keeps track of the total votes received
     %
     %%%%
     LeaderCommit(n: Nat, f: Nat, currentView: Int, voteCount: Nat) =
@@ -233,6 +240,8 @@ proc
     %%%%
     % Process for non-Leader replicas in the Commit phase
     %
+    % @param currentView         the current view of the algorithm
+    %
     %%%%
     NonLeaderCommit(currentView: Int) =
         sum receivedQCMsg: Message.ReceiveBroadcast(receivedQCMsg) . 
@@ -245,6 +254,11 @@ proc
 
     %%%%
     % Process for the Leader replica in the Decide phase
+    %
+    % @param n                   total number of replicas
+    % @param f                   number of faulty replicas
+    % @param currentView         the current view of the algorithm
+    % @param voteCount           initialize with 0, keeps track of the total votes received
     %
     %%%%
     LeaderDecide(n: Nat, f: Nat, currentView: Int, voteCount: Nat) =
@@ -274,6 +288,8 @@ proc
 
     %%%%
     % Process for non-Leader replicas in the Decide phase
+    %
+    % @param currentView         the current view of the algorithm
     %
     %%%%
     NonLeaderDecide(currentView: Int) =
