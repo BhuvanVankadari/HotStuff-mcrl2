@@ -158,7 +158,7 @@ proc
     NonLeaderPrepare(currentView: Int) =
         sum receivedProposal: Message.ReceiveBroadcast(receivedProposal) . 
         (
-            (parentNode(nodeMsg(receivedProposal)) == nodeQC(quorumCertificateMsg(receivedProposal))) ->
+            % (parentNode(nodeMsg(receivedProposal)) == nodeQC(quorumCertificateMsg(receivedProposal))) ->
                 SendVote(createMessage(prepare, currentView, nodeMsg(receivedProposal), NullQC))
                 .
                 NonLeaderPreCommit(currentView)
