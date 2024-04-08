@@ -1,0 +1,356 @@
+% Added: leader only sends a broadcast message - channel sends it n times, one for each replica
+% It resulted in more states as replicas can start to vote before the channel finishes sending the broadcast to all replicas
+% Added leader change and view change - this only happens after completion of all phases - newView interrupt was not implemented yet
+% the node is safe they vote
+% Assume the locked root is (1,0,0)
+% node(2,23,1) is the proposed node for the first view - it will be improved later by getting a node from a client proc
+% Note: the replica checks if node extends from m justify, not the leader
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%SortDeclaration%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+sort Message_type = struct newView | prepare | preCommit | commit | decide;
+
+% Each tree node contains a proposed command (or a batch of them), metadata associated with the protocol,
+% and a parent link
+% Metadata not used 
+% parentLink contains the id of the parent
+% parent link = 0 for first message / node = root
+sort Node = struct node(nodeID: Nat, command: Nat, parentLink: Nat) ?isNode | nullNode ?isNullNode;
+
+% A Quorum Certicate (QC) over a tuple type, viewNumber , node is a data type that combines a collection
+% of signatures for the same tuple signed by (n − f) replicas
+
+% for now, the signature will just count how many replicas signed it
+% null for first newview message
+sort QC = struct quorum(type: Message_type, viewNum: Nat, node: Node, signature: Nat) ?isQuorum | 
+				 nullQC ?isNullQC;
+
+% justify is an additional optional field.
+% leader always uses it to carry the QC for different phases
+% replicas use it in newView messages to carry the highest prepareQC
+sort Message = struct message(type: Message_type, viewNum: Nat, node: Node, mjustify: QC) ?isMessage |
+			          nullMessage ?isNullMessage;
+
+sort Vote = struct voteMessage(type_message: Message_type,viewNum: Nat, node: Node, qc: QC, replicaID: Pos) ?isVote |
+				   nullVote ?isNullVote;
+
+% initial phase  -> replicas send a special new view message
+sort Phase = struct  INITIAL | PREPARE | PRECOMMIT | COMMIT | DECIDE;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%MapDeclaration%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% n = 3f + 1
+map n: Nat; % number of replicas
+map f: Nat; % number of faulty replicas
+map num_views: Pos; % number of views
+ 
+eqn n = 2;
+eqn f = 0;
+eqn num_views = 2;
+
+% Function
+% calculate maximum element in a list
+map maxList: List(Nat) -> Nat;
+
+var a: Nat;
+	list: List(Nat);
+
+eqn maxList([]) = 0; % empty list
+	maxList([a]) = a; % one element
+	maxList(a |> list) = max(a, maxList(list)); % more than one element
+
+% Function
+% check if node extends locked node
+map extends: Node # Node -> Bool; % queried node, locked node
+var node1: Node;
+	node2: Node;
+eqn extends(node1, node2) = parentLink(node1) == nodeID(node2);
+	(node1 == nullNode || node2 == nullNode) -> extends(node1, node2) = false; % in case one of the nodes is null
+	
+% TO DO - implement recursion, i.e. check if the node is a grandchild of the locked node
+% (case when replica is left behind)
+
+%Function
+% check if the current view is >= the view of locked QC
+% map isLatestView : Nat # Nat -> Bool; %, lockedView, current_view
+% var viewLoked, curView: Nat;
+% eqn isLatestView(viewLoked, curView) = (viewLocked >= curView);
+
+% Function
+% find the highest QC
+map highestQC: QC # QC -> QC; % current QC, new QC
+var qc1: QC;
+	qc2: QC;
+eqn max(viewNum(qc1), viewNum(qc2)) == viewNum(qc1) -> highestQC(qc1, qc2) = qc1;
+    max(viewNum(qc1), viewNum(qc2)) == viewNum(qc2) -> highestQC(qc1, qc2) = qc2;
+	highestQC(nullQC, qc2) = qc2; %  highQC is null initially
+    highestQC(qc1, nullQC) = qc1; % in case one replica sends a nullQC
+	highestQC(nullQC, nullQC) = nullQC; % in case both replicas send a nullQC
+
+
+% Function 
+% check if the node is safe i.e.  the node either extends lockedQC (safety rule) or
+% highQC.viewNum > lockedQC.viewNum (liveness rule)
+map safeNode: Node # QC # QC -> Bool; % proposedNode, lockedQC, highQC
+var nodeToCheck: Node;
+ 	qcLocked: QC;
+	qcHigh: QC;
+eqn ((extends(nodeToCheck, node(qcLocked)) == true) || (viewNum(qcHigh) > viewNum(qcLocked) == true)) ->
+	 safeNode(nodeToCheck, qcLocked, qcHigh) = true;
+	((extends(nodeToCheck, node(qcLocked)) == false) && (viewNum(qcHigh) > viewNum(qcLocked) == false)) ->
+	 safeNode(nodeToCheck, qcLocked, qcHigh) = false;
+	 (nodeToCheck == nullNode || qcLocked == nullQC || qcHigh == nullQC) ->
+	  safeNode(nodeToCheck, qcLocked, qcHigh) = false; % in case one of the parameters is null
+	  
+% Function
+% check if a message is of expected type and for expectedview number
+map MatchingMessage: Message # Message_type # Nat -> Bool; % queried message, expected message type, expected view number
+var givenMessage: Message;
+	 expectedType: Message_type;
+	 expectedView: Nat;
+eqn (type(givenMessage) == expectedType && viewNum(givenMessage) == expectedView) -> MatchingMessage(givenMessage, expectedType, expectedView) = true;
+	(type(givenMessage) != expectedType || viewNum(givenMessage) != expectedView) -> MatchingMessage(givenMessage, expectedType, expectedView) = false;
+	(givenMessage == nullMessage) -> MatchingMessage(givenMessage, expectedType, expectedView) = false; % in case the message is null
+
+% Function
+% check if a vote has expected type and for expected view number
+map MatchingVote: Vote # Message_type # Nat -> Bool; % queried vote, expected message type, expected view number
+var givenVote: Vote;
+	 expected_type: Message_type;
+	 expected_view: Nat;
+eqn (type_message(givenVote) == expected_type && viewNum(givenVote) == expected_view) -> MatchingVote(givenVote, expected_type, expected_view) = true;
+	(type_message(givenVote) != expected_type || viewNum(givenVote) != expected_view) -> MatchingVote(givenVote, expected_type, expected_view) = false;
+	(givenVote == nullVote) -> MatchingVote(givenVote, expected_type, expected_view) = false; % in case the vote is null 
+
+% Function
+% check if a QC is of expected type and for expected view number
+map MatchingQC: QC # Message_type # Nat -> Bool; % queried QC, expected message type, expected view number
+var givenQC: QC;
+	 expectedMsjType: Message_type;
+	 expectedViewNum: Nat;
+eqn (type(givenQC) == expectedMsjType && viewNum(givenQC) == expectedViewNum) -> MatchingQC(givenQC, expectedMsjType, expectedViewNum) = true;
+	(type(givenQC) != expectedMsjType || viewNum(givenQC) != expectedViewNum) -> MatchingQC(givenQC, expectedMsjType, expectedViewNum) = false;
+	(givenQC == nullQC) -> MatchingQC(givenQC, expectedMsjType, expectedViewNum) = false; % in case the QC is null
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%ActDeclaration%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+act send_message, receive_message,receive_message_replica, send_message_leader,
+    receive_broadcast,message_sent, message_received, broadcast_received,
+	send_message_replica: Message # Pos # Pos; % message, sender, receiver
+
+act send_broadcast, receive_message_leader, broadcast_sent: Message # Pos; % message, leader
+
+act vote_message, receive_vote_replica, send_vote_to_leader, receive_vote, vote_sent,
+	vote_received: Vote # Pos # Pos; % vote message, sender receiver
+
+act execute_command: Nat;
+
+%act send_newViewInterrupt, receive_newViewInterrupt, newViewInterrupt, request_newLeader, get_newLeaderRequest;
+
+act broadcast_new_leader, receive_new_leader, get_new_leader, forward_new_leader, new_leader_sent, new_leader_received: Pos;
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%ProcDeclaration%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Replica%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Replica INITIAL%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% replica should send only 1 message
+proc ReplicaInitial(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, currentLeader: Pos ) = 
+	% special new view message from replica
+	% view 0 initial message
+	% correct node should extend the root i.e. parent link = 0
+	% to have a small state space we assume, for now, that the first message is always the same
+
+	send_message(message(newView, 0, nullNode, lockedQC) ,id, currentLeader).ReplicaPrepare(id,currentView, lockedQC, prepareQC, currentLeader);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Replica PREPARE%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+proc ReplicaPrepare(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, currentLeader: Pos ) = 
+	% Prepare phase -> replica waits for prepare message from leader and votes TO DO
+	sum k: Message.(isMessage(k) && type(k) == prepare ) -> receive_broadcast(k,currentLeader,id).
+		                            % message.node should extend msj.mjustify.node and be a safe node
+									((extends(node(k), node(mjustify(k))) == true && safeNode(node(k), lockedQC,
+									mjustify(k)) == true) -> (vote_message(voteMessage(prepare, currentView, node(k), nullQC, id),
+									id, currentLeader).ReplicaPreCommit(id,currentView, lockedQC, prepareQC, currentLeader))
+									% if message/node not good wait for anoter one 
+									<> ReplicaPrepare(id,currentView, lockedQC, prepareQC, currentLeader));
+
+% to see if replica has to catch up(case when (viewNum(qcHigh) > viewNum(qcLocked) is true)
+% in this case lockedQC should be modified? and replica should be able to get missing branch part from leader
+
+% to see if it is a problem that the same action is used for sending a broadcast in multiple phases
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Replica PRECOMMIT%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+proc ReplicaPreCommit(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, currentLeader: Pos) = 
+	 % check if the message is appropriate for the current phase and if it is not null
+	 sum k: Message. (isMessage(k) && type(k) == preCommit) -> receive_broadcast(k,currentLeader,id).
+	    % check validity of QC - if good vote for it and save the qc from m.justify as prepareQC
+		((MatchingQC(mjustify(k), prepare, currentView) == true) ->  (vote_message(voteMessage(preCommit,
+		currentView, node(mjustify(k)), nullQC, id), id, currentLeader).ReplicaCommit(id,currentView, lockedQC, mjustify(k), currentLeader))
+		% if message is not good wait for another one - do not vote
+		<> ReplicaPreCommit(id,currentView, lockedQC, prepareQC, currentLeader));
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Replica COMMIT%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+proc ReplicaCommit(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, currentLeader: Pos) =
+	% check if the message is appropriate for the current phase and if it is not null
+	sum k: Message. (isMessage(k) && type(k) == commit) -> receive_broadcast(k, currentLeader, id).
+		% check validity of QC - if good vote for it and save it as lockedQC - replica is locked on decision
+		% QC has to be of type preCommit and the message has to be for the currentView
+		(MatchingQC(mjustify(k), preCommit, currentView) == true) ->  (vote_message(voteMessage(commit, 
+		currentView, node(mjustify(k)), nullQC, id), id, currentLeader).ReplicaDecide(id,currentView, mjustify(k), prepareQC, currentLeader));
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Replica DECIDE%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+proc ReplicaDecide(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, currentLeader: Pos) =
+
+ 	% check if the message is appropriate for the current phase and if it is not null
+	sum k: Message. (isMessage(k) && type(k) == decide) -> receive_broadcast(k, currentLeader, id).
+		% check validity of QC - if good vote for it 
+		(MatchingQC(mjustify(k), commit, currentView) == true) ->  (execute_command(command(node(mjustify(k)))).
+		ViewChange(id, currentView, lockedQC, prepareQC, currentLeader));
+	
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Replica NewViewInterrupt%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% when a timeout occurs, replicas change the view and a new leader is elected
+%proc ReplicaNewViewInterrupt(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, currentLeader: Pos) = 
+	
+ 	%receive_newViewInterrupt.request_newLeader.ViewChange(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, currentLeader: Pos);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Replica ViewChange%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%	
+
+% after a new view interupt occurs, or after decide phase is over, replicas change the view - a new leader is elected and 
+% replicas send new view messages with the latest prepareQC
+proc ViewChange(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, currentLeader: Pos) = 
+    sum new_leader_id: Pos. (new_leader_id <= n) -> receive_new_leader(new_leader_id).
+	send_message(message(newView, currentView + 1, nullNode, prepareQC), id, new_leader_id).ReplicaPrepare(id, currentView + 1, lockedQC,
+	prepareQC, new_leader_id);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Leader%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Leader PREPARE%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% numOfMessagesPerView = {view: num} - num of received messages for each view
+proc LeaderPrepare(id : Pos, currentView: Nat, numOfMessagesPerView : Bag(Nat), proposedNode: Node, highQC: QC) = 
+	  
+	 % Prepare phase 
+	 % wait for n-f messages
+	 % check if the message is for the appropriate phase in which the leader is in
+	 % every view, all replicas + leader get a command from the client - te proposedNode - this becomes the
+	 % leaf of the highest qc node and it is proposed to replicas
+	 % highest QC is the QC with the highest view number from all prepareQC's from replicas
+
+	 (count(Int2Nat(currentView - 1), numOfMessagesPerView ) < n - f) ->
+	  (sum i: Message.(isMessage(i)) -> sum sender: Pos. (sender <= n) -> receive_message(i,sender,id).
+	  (MatchingMessage(i, newView, Int2Nat(currentView - 1)) == true) -> LeaderPrepare(id,currentView, numOfMessagesPerView + Set2Bag({viewNum(i)}), proposedNode,
+	  										highestQC(highQC, mjustify(i)))) + 
+	  
+	 % in the initial state we assume that there are no trees, i.e. the current node will be the root
+	 % this means that we do not select any branch with highest view num, we just create a proposal
+	 % for the node receinved in the messages
+	 % when we have n - f messages we create a proposal if there is none
+
+	 (count(Int2Nat(currentView - 1), numOfMessagesPerView ) >= n - f) -> (send_broadcast(message(prepare,currentView, proposedNode,
+	  																highQC), id).LeaderPreCommit(id,currentView, proposedNode, highQC, []));
+		
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Leader PRECOMMIT%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+proc LeaderPreCommit(id : Pos, currentView: Nat, proposedNode: Node, highQC: QC, replicaVoted: List(Pos)) = 
+						    % check if the vote is for the current view and the proposed node
+(#replicaVoted < n - f) -> sum vote: Vote.(isVote(vote)) -> sum sender: Pos.(MatchingVote(vote, prepare, currentView) == true
+							 && node(vote) == proposedNode && qc(vote) == nullQC && sender <= n) ->
+							 receive_vote(vote, sender, id).
+							% make sure that each vote from a replica is counted only once and that the vote
+							% is for the sender
+						   (sender in replicaVoted == false && sender == replicaID(vote) ) -> LeaderPreCommit(id,
+						    currentView, proposedNode, highQC, replicaVoted <| sender) +
+
+% once n-f votes are collected, the leader broadcasts the prepareQC to all replicas
+( #replicaVoted >= n - f ) ->  send_broadcast(message(preCommit,currentView, nullNode, quorum(prepare,
+											  currentView, proposedNode, Int2Nat(n - f))), id).
+											  LeaderCommit(id, currentView, proposedNode, highQC, []);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Leader PRECOMMIT%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+LeaderCommit(id : Pos, currentView: Nat, proposedNode: Node, highQC: QC, replicaVoted: List(Pos)) =
+			
+(#replicaVoted < n - f) -> sum vote: Vote.(isVote(vote)) -> sum sender: Pos.(MatchingVote(vote, preCommit, currentView) == true 
+						   && node(vote) == proposedNode && qc(vote) == nullQC && sender <= n) ->
+						   receive_vote(vote, sender, id).
+						   (sender in replicaVoted == false && sender == replicaID(vote) ) -> LeaderCommit(id,
+						    currentView, proposedNode, highQC, replicaVoted <| sender) +
+(#replicaVoted >= n - f) -> send_broadcast(message(commit,currentView, nullNode, quorum(preCommit, currentView, proposedNode,
+										   Int2Nat(n - f))), id).LeaderDecide(id, currentView, proposedNode, highQC, []);			
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Leader DECIDE%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ 
+proc LeaderDecide(id : Pos, currentView: Nat, proposedNode: Node, highQC: QC, replicaVoted: List(Pos)) = 
+(#replicaVoted < n - f) -> sum vote: Vote.(isVote(vote) == true) -> sum sender: Pos.(MatchingVote(vote, commit, currentView) == true && 
+						   node(vote) == proposedNode && qc(vote) == nullQC && sender <= n) ->
+						   receive_vote(vote, sender, id).
+						   (sender in replicaVoted == false && sender == replicaID(vote) ) -> LeaderDecide(id,
+						    currentView, proposedNode, highQC, replicaVoted <| sender) +
+(#replicaVoted >= n - f) -> send_broadcast(message(decide,currentView, nullNode, quorum(commit, currentView, proposedNode, Int2Nat(n - f))),
+ 										   id).LeaderChange(id, currentView);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Leader Change%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% leader change after each view and when a new view interrupt occurs
+proc LeaderChange(id: Pos, currentView: Nat) = 
+    % get a new leader different from current leader and broadcast it to all replicas
+	sum new_Leader: Pos.(new_Leader <= n && new_Leader != id) -> broadcast_new_leader(new_Leader).LeaderPrepare(new_Leader, Int2Nat(currentView + 1), {0:0},
+	nullNode, nullQC);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Channel%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+proc Channel (broadcastedToReplica: List(Pos), broadcastFinished: Bool, messageToSend: Message, broadcastFromLeader: Pos, 
+              broadcastNewLeader: List(Pos), broadcastLeaderFinished: Bool, leaderToSend: Pos) =
+	% get message from replica, send it to leader
+	(sum k: Message. sum i: Pos.sum leader: Pos.
+	(i <= n && leader <= n ) -> ((receive_message_replica(k, i, leader).send_message_leader(k, i, leader).
+				Channel(broadcastedToReplica, broadcastFinished, messageToSend, broadcastFromLeader, broadcastNewLeader, broadcastLeaderFinished,
+				leaderToSend)))) + 
+    % get broadcast from leader, send it to all replicas, save leader to forward broadcast from that leader
+	(sum k: Message.sum leader: Pos.receive_message_leader(k,leader).Channel([], false, k, leader, broadcastNewLeader, broadcastLeaderFinished,
+				leaderToSend)) + 
+	(#broadcastedToReplica < n - 1 && broadcastFinished == false) -> (sum replica: Pos.(replica in broadcastedToReplica == false &&
+				replica <= n) -> send_message_replica(messageToSend,broadcastFromLeader, replica).Channel(broadcastedToReplica <| replica, false,
+				messageToSend, broadcastFromLeader, broadcastNewLeader, broadcastLeaderFinished,
+				leaderToSend)) + 
+	% have one more message to send from broadcast
+	(#broadcastedToReplica == n - 1 && broadcastFinished == false)  -> (sum replica: Pos.(replica in broadcastedToReplica == false &&
+				replica <= n) -> send_message_replica(messageToSend,broadcastFromLeader, replica).Channel([], true, nullMessage, broadcastFromLeader
+				, broadcastNewLeader, broadcastLeaderFinished, leaderToSend)) + 
+	% forward votes to leader
+	(sum v: Vote. sum i: Pos.sum leader: Pos.
+    (i <= n) -> receive_vote_replica(v,i,leader).send_vote_to_leader(v,i,leader).Channel(broadcastedToReplica, broadcastFinished,
+																							   messageToSend, broadcastFromLeader, 
+																							   broadcastNewLeader, broadcastLeaderFinished,
+																							   leaderToSend)) + 
+	% get new leader broadcast, save data to send it to all replicas
+	(sum new_leader: Pos.get_new_leader(new_leader).Channel(broadcastedToReplica, broadcastFinished, messageToSend, broadcastFromLeader, 
+															[], false, new_leader)) +
+	% broadcast new leader to all replicas
+	(#broadcastNewLeader < n - 1 && broadcastLeaderFinished == false) -> (sum replica: Pos.(replica in broadcastNewLeader == false &&
+				replica <= n) -> forward_new_leader(leaderToSend). Channel(broadcastedToReplica, broadcastFinished, messageToSend, broadcastFromLeader,
+				broadcastNewLeader <| replica, false, leaderToSend)) +
+	(#broadcastNewLeader == n - 1 && broadcastLeaderFinished == false) -> (sum replica: Pos.(replica in broadcastNewLeader == false &&
+				replica <= n) -> forward_new_leader(leaderToSend). Channel(broadcastedToReplica, broadcastFinished, messageToSend, broadcastFromLeader,
+				[], true, leaderToSend));
+
+
+	
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Initialization%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% assume that first leader is replica 1
+init allow({message_sent, message_received, broadcast_sent, broadcast_received, vote_sent, vote_received,
+			execute_command, new_leader_sent, new_leader_received},
+	 comm({ send_message | receive_message_replica -> message_sent,
+		    send_message_leader | receive_message -> message_received,
+			send_broadcast | receive_message_leader -> broadcast_sent,
+			send_message_replica | receive_broadcast -> broadcast_received,
+			vote_message | receive_vote_replica -> vote_sent,
+			send_vote_to_leader | receive_vote -> vote_received,
+			broadcast_new_leader | get_new_leader -> new_leader_sent,
+			forward_new_leader | receive_new_leader -> new_leader_received},
+			ReplicaInitial(1, 1, quorum(newView, 0, node(1,0,0),n), nullQC, 1) ||
+			ReplicaInitial(2, 1, quorum(newView, 0, node(1,0,0),n), nullQC, 1) ||
+		    LeaderPrepare(1, 1, {0:0}, node(2,23,1), nullQC) ||
+			Channel([], true, nullMessage, 1, [], true, 1)
+	 ));
