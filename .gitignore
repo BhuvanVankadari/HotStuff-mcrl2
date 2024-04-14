@@ -1,8 +1,5 @@
 *.lps
 *.lts
 *.DS_Store
-/Bhuvan
-/Agnes
-/Agnes
-/Agnes/IntermediateModelAgnes
-Agnes/IntermediateModelAgnes/IntermediateModelAgnes_spec.mcrl2
+/Bhuvan/
+/Agnes/
