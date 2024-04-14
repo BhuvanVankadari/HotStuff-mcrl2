@@ -1,0 +1,74 @@
+sort
+    % Types of messages that can be generated within the protocol
+    MessageType = struct newView
+                       | prepare
+                       | preCommit
+                       | commit
+                       | decide;
+    
+    % Data structure for the quorum certificate
+    %
+    % A Quorum Certicate (QC) is a signed message and has a specific message type, corresponding view number, the node 
+    % and the signature on the replicas that signed it the signature is the number of replicas that signed it
+    QuorumCertificate = struct createQC(type: MessageType, viewNumber: Nat, node: Node, signature: Nat)
+                             | NullQC;
+
+    % Data structure for the tree of commands
+    %
+    % Each tree node contains a proposed command, a parent link and an ID for the node
+    % parentLink contains the id of the parent
+    % parent link = 0 for the root
+    Node = struct createNode(nodeID: Nat, command: Nat, parentLink: Nat) | NullNode;
+
+    % Data structure for the message
+    %
+    % A message has a type, a view number, a node and an additional fiels, mjustufy
+    % The leader always uses mjustify to carry the QC for different phases
+    % Replicas use mjustify in newView messages to carry the highest prepareQC
+    Message = struct createMessage(type: MessageType, viewNumber: Nat, node: Node, mJustify: QuorumCertificate,
+                                   partialSignature: Signature) ?isMessage
+                   | NullMessage ?isNullMessage;
+    
+    % Data structure for the signature
+    %
+    % The signature is used for signing the messages and uniquely identifying the replica
+    % A faulty replica controlled by an adversary cannot replicate the signature of another replica. In this case, it 
+    % cannot use another replica's ID to sign the message (guaranteed by the protocol's description of the cryptographic
+    % primitives it relies on).
+    Signature = struct createSignature(replicaID: Pos)
+                     | NullSignature;
+                     
+% Constant declarations
+map
+    % Number of replicas
+    N: Nat; 
+    
+    % Number of faulty replicas
+    F: Nat;
+
+    % Maximum number of views
+    %
+    % Restriction on the maximum number of views to avoid infinite state spaces
+    NUM_VIEWS: Pos;
+    
+    % Maximum command number
+    %
+    % Client sends a command between 0 and MAX_COMMAND to avoid infinite state spaces
+    MAX_COMMAND: Nat;
+
+    % List of valid message types
+    %
+    % List that a faulty replica uses to randomly sample from to decide on the message type
+    MESSAGE_LIST: List(Message_type);
+    
+% Constant assignments
+eqn
+    N = 3;
+    F = 1;
+    NUM_VIEWS = 3;
+    MAX_COMMAND = 3;
+    MESSAGE_LIST = [newView, prepare, preCommit, commit, decide];
+
+% Function declarations
+map
+    
