@@ -4,7 +4,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%SortDeclaration%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Possible message types
-sort Message_type = struct newView | prepare | preCommit | commit | decide ;
+sort Message_type = struct newView | prepare | preCommit | commit | decide;
 
 % Each tree node contains a proposed command, a parent link and an ID for the node
 % parentLink contains the id of the parent
