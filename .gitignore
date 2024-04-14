@@ -1,5 +1,5 @@
 *.lps
 *.lts
 *.DS_Store
-*Agnes/
-*Bhuvan/
+/Bhuvan
+/Agnes
