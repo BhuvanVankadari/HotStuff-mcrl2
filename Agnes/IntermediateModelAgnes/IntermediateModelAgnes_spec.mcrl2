@@ -88,7 +88,7 @@ eqn max(viewNum(qc1), viewNum(qc2)) == viewNum(qc1) -> highestQC(qc1, qc2) = qc1
 % highQC.viewNum > lockedQC.viewNum (liveness rule)
 map safeNode: Node # QC # QC -> Bool; % proposedNode, lockedQC, highQC
 var nodeToCheck: Node;
- 	qcLocked: QC;
+	qcLocked: QC;
 	qcHigh: QC;
 eqn ((extends(nodeToCheck, node(qcLocked)) == true) || (viewNum(qcHigh) > viewNum(qcLocked) == true)) ->
 	 safeNode(nodeToCheck, qcLocked, qcHigh) = true;
@@ -96,7 +96,7 @@ eqn ((extends(nodeToCheck, node(qcLocked)) == true) || (viewNum(qcHigh) > viewNu
 	 safeNode(nodeToCheck, qcLocked, qcHigh) = false;
 	 (nodeToCheck == nullNode || qcLocked == nullQC || qcHigh == nullQC) ->
 	  safeNode(nodeToCheck, qcLocked, qcHigh) = false; % in case one of the parameters is null
-	  
+	  	
 % Function
 % check if a message is of expected type and for expected view number
 map MatchingMessage: Message # Message_type # Nat -> Bool; % queried message, expected message type, expected view number
