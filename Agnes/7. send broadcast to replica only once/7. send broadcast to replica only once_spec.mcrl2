@@ -1,0 +1,57 @@
+% Sending a message through channel
+% Fixed sending broacast twice
+
+% sort Message_type = struct newView | prepare | preCommit | commit | decide;
+
+% sort Message = struct message(type: Message_type, viewNum: Pos);
+
+%n = 3f + 1
+map n: Pos; % number of replicas
+map f: Nat; %number of faulty replicas
+map num_views: Pos; % number of views
+map id_leader: Nat; %leader id
+ 
+eqn n = 2;
+eqn f = 0;
+eqn num_views = 2;
+eqn id_leader = 1;
+
+% calculate maximum element in a list
+map maxList: List(Nat) -> Nat;
+
+var a: Nat;
+	list: List(Nat);
+
+eqn maxList([]) = 0; % empty list
+	maxList([a]) = a; % one element
+	maxList(a |> list) = max(a, maxList(list)); % more than one element
+
+act send_message, receive_message,receive_message_replica, send_message_leader, send_broadcast, receive_broadcast,message_sent, message_received, broadcast_sent, broadcast_received,receive_message_leader, send_message_replica: Nat # Nat # Nat; % message, sender, receiver
+
+%state = 0 -> replica sends message, state = 1 replica waits for message 
+%replica should send only 1 msj
+proc Replica(id: Pos, currentView: Nat, state: Bool) = 
+	%replica sends message=
+	(state == false ) -> (send_message(currentView,id,id_leader).Replica(id,currentView,true) ) + 
+	%replica receives message
+	(state == true)  -> (sum k: Nat.(receive_broadcast(k,id_leader,id).(state==true)->Replica(id,currentView,false)));
+
+
+proc Leader(id : Pos, highestView : List(Nat), count_msj : Nat, broadcastedToReplica: List(Pos)) = 
+	 (count_msj < n - f) -> (sum i: Nat.sum j: Pos. (receive_message(i,j,id).Leader(id, highestView <| i, count_msj + 1, []))) + 
+	 (count_msj >= n - f)  -> (sum i: Pos. (i in broadcastedToReplica == false) -> (send_broadcast(maxList(highestView), id, i).Leader(id,highestView, count_msj, broadcastedToReplica <| i)));
+
+proc Channel =
+	(sum k: Nat.sum i: Pos.
+	(i <= n && k <= num_views) -> ((receive_message_replica(k,i,id_leader).send_message_leader(k,i,id_leader).Channel) + (receive_message_leader(k,id_leader,i).send_message_replica(k,id_leader,i).Channel)));
+
+init allow({message_sent, message_received, broadcast_sent, broadcast_received},
+	 comm({ send_message | receive_message_replica -> message_sent,
+		    send_message_leader | receive_message -> message_received,
+			send_broadcast | receive_message_leader -> broadcast_sent,
+			send_message_replica | receive_broadcast -> broadcast_received},
+			Replica(1,1,false) || Leader(1,[],0,[]) || Replica(2,1,false) || Channel
+	 ));
+
+
+	
