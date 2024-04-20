@@ -177,3 +177,89 @@ eqn
     matchingQC(QCToCheck, expectedMsgType, expectedViewNum) =
         (expectedMsgType == type(QCToCheck)) &&
         (expectedViewNum == viewNumber(QCToCheck));
+
+
+
+act
+    % Actions for sending a message. The data assciated with each action is: the message, the sender, the receiver
+    send_message, message_to_forward, message_sent, forward_message, receive_message, message_received, 
+    send_broadcast, broadcast_to_forward, broadcast_sent,forward_broadcast, receive_broadcast, 
+    broadcast_received: Message # Pos # Pos
+
+%%%%
+% Process for initialising the non-faulty replicas
+%
+% @param id                  the ID of the replica
+% @param currentView         the view of the protocol in which the replica is in
+% @param lockedQC            most recent signed QC that the replica received 
+%                            initially it constains the QC for view 0 and root node (1, 0, 0)
+% @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)    
+% @param currentLeader       leader of the current view    
+%%%%
+proc ReplicaInitial(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, currentLeader: Pos) = 
+    % A newView message from view 0 is assumed when the protocol is initiated
+    send_message(createMessage(newView, 0, nullNode, prepareQC), id, currentLeader).ReplicaPrepare(id, currentView, 
+                                                                                    lockedQC, prepareQC, currentLeader);
+
+%%%%
+% Process for the prepare phase of the non-faulty replicas
+%
+% @param id                  the ID of the replica
+% @param currentView         the view of the protocol in which the replica is in
+% @param lockedQC            most recent signed QC that the replica received 
+% @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)    
+% @param currentLeader       leader of the current view    
+%%%%
+proc ReplicaPrepare(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, currentLeader: Pos ) = 
+    sum message: Message -> receive_broadcast(message, currentLeader, id).
+                            % Check validity of message
+                            (matchingMessage(message, prepare, currentView) && 
+                             extends)
+
+%%%%
+% Process for the initializing the leader 
+%
+% @param id                  the ID of the replica that has a leader role in the current view
+% @param currentView         the view of the protocol in which the replica is in
+% @param receivedMsgFrom     list of replicas that sent a newView message to the leader
+% @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)    
+% @param currentLeader       leader of the current view    
+%%%%
+proc LeaderInitial(id : Pos, currentView: Nat, receivedMessageFromReplica: List(Pos), proposedNode: Node, highQC: QC, commandList: List(Nat), 
+				   nextIdNode: Nat) = 
+	% leader collects the commands from clients and adds them to the command list
+	sum new_command: Nat. (new_command <= max_command) -> get_command_from_client(new_command, id).LeaderInitial(id, currentView,
+														numOfMessagesPerView, proposedNode, highQC, commandList <| new_command, 
+														nextIdNode) + 
+	
+	% Prepare phase 
+	% wait for n-f  new view messages for view 0 - special messages to start the protocol
+	% check if the message is of the expected type
+	% every view, leader gets a command from the client this becomes the leaf of the highest qc node and it is proposed to replicas
+	% highest QC is the QC with the highest view number from all prepareQC's from replicas
+
+	(count(Int2Nat(currentView - 1), numOfMessagesPerView ) < n - f) ->
+							(sum i: Message.(isMessage(i)) -> sum sender: Pos. (sender <= n) -> receive_message(i,sender,id).
+							((MatchingMessage(i, newView, Int2Nat(currentView - 1)) == true) -> (LeaderInitial(id,currentView, 
+																								numOfMessagesPerView + Set2Bag({viewNum(i)}),
+																								proposedNode, highestQC(highQC, mjustify(i)), 
+																								commandList, nextIdNode))
+
+																							% if message is not of expected type or 
+																							% view number ignore it 
+																							<> 	LeaderInitial(id, currentView,
+																								numOfMessagesPerView, proposedNode, highQC,
+																								commandList, nextIdNode))) + 
+
+	% once n-f messages are collected and there is a command to send, the leader broadcasts the proposal (new node) to all replicas
+	% create a node with the first command in the command list, the next node ID and the parent link - the node id of highQC
+	% the command is then deleted from commandList and nextIdNode is incremented and the created node becomes the proposedNode
+
+	(count(Int2Nat(currentView - 1), numOfMessagesPerView ) >= n - f && #commandList > 0) -> (send_broadcast(message(prepare,currentView,
+																							node(nextIdNode,  head(commandList), 
+																							nodeID(node(highQC))), highQC), id).
+																							LeaderPreCommit(id,currentView, 
+																							node(nextIdNode, head(commandList), 
+																							nodeID(node(highQC))), highQC, [],
+																							tail(commandList), Int2Nat(nextIdNode + 1))
+																							);

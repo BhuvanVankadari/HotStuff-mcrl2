@@ -162,7 +162,7 @@ act broadcast_new_leader, receive_new_leader, get_new_leader, forward_new_leader
 % id is the replica ID, each replica has a unique ID
 
 proc ReplicaInitial(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, currentLeader: Pos ) = 
-	send_message(message(newView, 0, nullNode, lockedQC) ,id, currentLeader).ReplicaPrepare(id,currentView, lockedQC, prepareQC, currentLeader);
+	send_message(message(newView, 0, nullNode, prepareQC) ,id, currentLeader).ReplicaPrepare(id,currentView, lockedQC, prepareQC, currentLeader);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Replica PREPARE%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
