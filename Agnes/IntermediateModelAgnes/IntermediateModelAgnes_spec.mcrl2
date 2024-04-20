@@ -129,8 +129,8 @@ eqn (type(givenQC) == expectedMsjType && viewNum(givenQC) == expectedViewNum) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%ActDeclaration%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-act send_message, receive_message,receive_message_replica, send_message_leader,
-    receive_broadcast,message_sent, message_received, broadcast_received,
+act send_message, receive_message, receive_message_replica, send_message_leader,
+    receive_broadcast, message_sent, message_received, broadcast_received,
 	send_message_replica: Message # Pos # Pos; % message, sender, receiver
 
 act send_broadcast, receive_message_leader, broadcast_sent: Message # Pos; % message, leader
