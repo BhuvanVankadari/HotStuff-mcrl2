@@ -51,10 +51,10 @@ map
     % Restriction on the maximum number of views to avoid infinite state spaces
     NUM_VIEWS: Pos;
     
-    % Maximum command number
+    % List of commands to be executed in order ()
     %
     % Client sends a command between 0 and MAX_COMMAND to avoid infinite state spaces
-    MAX_COMMAND: Nat;
+    COMMAND_LIST: List(Nat);
 
     % List of valid message types
     %
@@ -178,13 +178,11 @@ eqn
         (expectedMsgType == type(QCToCheck)) &&
         (expectedViewNum == viewNumber(QCToCheck));
 
-
-
 act
     % Actions for sending a message. The data assciated with each action is: the message, the sender, the receiver
-    send_message, message_to_forward, message_sent, forward_message, receive_message, message_received, 
-    send_broadcast, broadcast_to_forward, broadcast_sent,forward_broadcast, receive_broadcast, 
-    broadcast_received: Message # Pos # Pos
+    send_message, receive_message_to_forward, message_sent, forward_message, receive_message, message_received, 
+    send_broadcast, receive_broadcast_to_forward, broadcast_sent, forward_broadcast, receive_broadcast, 
+    broadcast_received: Message # Pos # Pos;
 
 %%%%
 % Process for initialising the non-faulty replicas
@@ -196,10 +194,10 @@ act
 % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)    
 % @param currentLeader       leader of the current view    
 %%%%
-proc ReplicaInitial(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, currentLeader: Pos) = 
+proc ReplicaNewView(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, currentLeader: Pos) = 
     % A newView message from view 0 is assumed when the protocol is initiated
-    send_message(createMessage(newView, 0, nullNode, prepareQC), id, currentLeader).ReplicaPrepare(id, currentView, 
-                                                                                    lockedQC, prepareQC, currentLeader);
+    send_message(createMessage(newView, currentView, nullNode, prepareQC), id, currentLeader) . 
+    ReplicaPrepare(id, currentView + 1, lockedQC, prepareQC, currentLeader);
 
 %%%%
 % Process for the prepare phase of the non-faulty replicas
@@ -222,10 +220,11 @@ proc ReplicaPrepare(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, curr
 % @param id                  the ID of the replica that has a leader role in the current view
 % @param currentView         the view of the protocol in which the replica is in
 % @param receivedMsgFrom     list of replicas that sent a newView message to the leader
+% @
 % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)    
 % @param currentLeader       leader of the current view    
 %%%%
-proc LeaderInitial(id : Pos, currentView: Nat, receivedMessageFromReplica: List(Pos), proposedNode: Node, highQC: QC, commandList: List(Nat), 
+proc LeaderInitial(id : Pos, currentView: Nat, receivedMsgFrom: List(Pos), proposedNode: Node, highQC: QC, commandList: List(Nat), 
 				   nextIdNode: Nat) = 
 	% leader collects the commands from clients and adds them to the command list
 	sum new_command: Nat. (new_command <= max_command) -> get_command_from_client(new_command, id).LeaderInitial(id, currentView,
@@ -263,3 +262,5 @@ proc LeaderInitial(id : Pos, currentView: Nat, receivedMessageFromReplica: List(
 																							nodeID(node(highQC))), highQC, [],
 																							tail(commandList), Int2Nat(nextIdNode + 1))
 																							);
+
+proc Client()                                                                 
