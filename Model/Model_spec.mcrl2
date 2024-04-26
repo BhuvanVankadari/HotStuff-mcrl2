@@ -37,7 +37,7 @@ sort
     % primitives it relies on).
     Signature = struct createSignature(replicaID: Pos)
                      | NullSignature;
-                     
+
 % Constant declarations
 map
     % Number of replicas
@@ -53,7 +53,8 @@ map
     
     % List of commands to be executed in order ()
     %
-    % Client sends a command between 0 and MAX_COMMAND to avoid infinite state spaces
+    % Client sends a command from the predefined list of commands. The command list should contain at least NUM_VIEWS
+    % commands
     COMMAND_LIST: List(Nat);
 
     % List of valid message types
@@ -66,7 +67,7 @@ eqn
     N = 3;
     F = 1;
     NUM_VIEWS = 3;
-    MAX_COMMAND = 3;
+    COMMAND_LIST = [1, 2, 3]
     MESSAGE_LIST = [newView, prepare, preCommit, commit, decide];
 
 % Function declarations
@@ -220,11 +221,9 @@ proc ReplicaPrepare(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, curr
 % @param id                  the ID of the replica that has a leader role in the current view
 % @param currentView         the view of the protocol in which the replica is in
 % @param receivedMsgFrom     list of replicas that sent a newView message to the leader
-% @
-% @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)    
-% @param currentLeader       leader of the current view    
+% @param       
 %%%%
-proc LeaderInitial(id : Pos, currentView: Nat, receivedMsgFrom: List(Pos), proposedNode: Node, highQC: QC, commandList: List(Nat), 
+proc LeaderPrepare(id : Pos, currentView: Nat, receivedMsgFrom: List(Pos), proposedNode: Node, highQC: QC, commandList: List(Nat), 
 				   nextIdNode: Nat) = 
 	% leader collects the commands from clients and adds them to the command list
 	sum new_command: Nat. (new_command <= max_command) -> get_command_from_client(new_command, id).LeaderInitial(id, currentView,
