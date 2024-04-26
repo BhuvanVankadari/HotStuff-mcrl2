@@ -61,6 +61,11 @@ map
     %
     % List that a faulty replica uses to randomly sample from to decide on the message type
     MESSAGE_LIST: List(Message_type);
+
+    % List of leader scheme to aid in the rotating leader scheme
+    %
+    % List that all replicas use to determine the next leader
+    LEADER_SCHEME: List(Pos);
     
 % Constant assignments
 eqn
@@ -69,6 +74,7 @@ eqn
     NUM_VIEWS = 3;
     COMMAND_LIST = [1, 2, 3]
     MESSAGE_LIST = [newView, prepare, preCommit, commit, decide];
+    LEADER_SCHEME = [1, 2, 3, 4, 5];
 
 % Function declarations
 map
@@ -223,21 +229,16 @@ proc ReplicaPrepare(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, curr
 % @param receivedMsgFrom     list of replicas that sent a newView message to the leader
 % @param       
 %%%%
-proc LeaderPrepare(id : Pos, currentView: Nat, receivedMsgFrom: List(Pos), proposedNode: Node, highQC: QC, commandList: List(Nat), 
-				   nextIdNode: Nat) = 
-	% leader collects the commands from clients and adds them to the command list
-	sum new_command: Nat. (new_command <= max_command) -> get_command_from_client(new_command, id).LeaderInitial(id, currentView,
-														numOfMessagesPerView, proposedNode, highQC, commandList <| new_command, 
-														nextIdNode) + 
-	
-	% Prepare phase 
-	% wait for n-f  new view messages for view 0 - special messages to start the protocol
-	% check if the message is of the expected type
-	% every view, leader gets a command from the client this becomes the leaf of the highest qc node and it is proposed to replicas
-	% highest QC is the QC with the highest view number from all prepareQC's from replicas
+proc LeaderPrepare(id : Pos, currentView: Nat, receivedMsgFrom: List(Pos), highQC: QC, counterCommand: Nat) = 
 
-	(count(Int2Nat(currentView - 1), numOfMessagesPerView ) < n - f) ->
-							(sum i: Message.(isMessage(i)) -> sum sender: Pos. (sender <= n) -> receive_message(i,sender,id).
+    sum message: Message . sum sender: Pos .
+    receive_message(message, sender, id) -> (sender <= N &&)
+
+
+
+
+	sum message: Message.(count(Int2Nat(currentView - 1), receivedMsgFrom) < n - f) ->
+                            (sum i: Message.(isMessage(i)) -> sum sender: Pos. (sender <= n) -> receive_message(i,sender,id).
 							((MatchingMessage(i, newView, Int2Nat(currentView - 1)) == true) -> (LeaderInitial(id,currentView, 
 																								numOfMessagesPerView + Set2Bag({viewNum(i)}),
 																								proposedNode, highestQC(highQC, mjustify(i)), 
@@ -261,5 +262,3 @@ proc LeaderPrepare(id : Pos, currentView: Nat, receivedMsgFrom: List(Pos), propo
 																							nodeID(node(highQC))), highQC, [],
 																							tail(commandList), Int2Nat(nextIdNode + 1))
 																							);
-
-proc Client()                                                                 
