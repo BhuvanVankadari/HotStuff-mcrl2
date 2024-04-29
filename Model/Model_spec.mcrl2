@@ -36,7 +36,7 @@ sort
     % cannot use another replica's ID to sign the message (guaranteed by the protocol's description of the cryptographic
     % primitives it relies on).
     Signature = struct createSignature(replicaID: Pos)
-                     | NullSignature;
+                     | nullSignature;
 
 % Constant declarations
 map
@@ -203,7 +203,7 @@ act
 %%%%
 proc ReplicaNewView(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, currentLeader: Pos) = 
     % A newView message from view 0 is assumed when the protocol is initiated
-    send_message(createMessage(newView, currentView, nullNode, prepareQC), id, currentLeader) . 
+    send_message(createMessage(newView, currentView, nullNode, prepareQC, nullSignature), id, currentLeader) . 
     ReplicaPrepare(id, currentView + 1, lockedQC, prepareQC, currentLeader);
 
 %%%%
@@ -219,7 +219,10 @@ proc ReplicaPrepare(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, curr
     sum message: Message -> receive_broadcast(message, currentLeader, id).
                             % Check validity of message
                             (matchingMessage(message, prepare, currentView) && 
-                             extends())
+                            % Check validity of node 
+                             extends(node(mJustify(message), node(message))) && 
+                             safeNode(node(message), lockedQC, mJustify(message))) -> 
+                            send_message()
 
 %%%%
 % Process for the initializing the leader 
@@ -247,5 +250,5 @@ proc LeaderPrepare(id : Pos, currentView: Nat, receivedMsgFrom: List(Pos), highQ
         % Leader received n - f correct newView messages, it can move to the next phase
         <>
             send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, COMMAND_LIST.counterCommand,
-            nodeID(createNode(highQC))), highQC)).
+            nodeID(node(highQC))), highQC, nullSignature)).
             LeaderPreCommit(id, currentView, [], highQC, counterCommand);
