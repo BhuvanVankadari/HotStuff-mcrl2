@@ -36,7 +36,7 @@ sort
     % cannot use another replica's ID to sign the message (guaranteed by the protocol's description of the cryptographic
     % primitives it relies on).
     Signature = struct createSignature(replicaID: Pos)
-                     | nullSignature;
+                     | NullSignature;
 
 % Constant declarations
 map
@@ -87,7 +87,7 @@ map
 % Parameters for the functions
 var
     % Parameters associated with the extends() function
-    expectedParent: Node;
+    expectedAncestor: Node;
     nodeToCheck: Node;
 
     % Parameters associated with the highestQC() function
@@ -114,14 +114,15 @@ eqn
     %%%
     % Function to check if a node extends required node
     %
-    % @param expectedParent      the expected parent node
-    % @param nodeToCheck         the node whose parent is being checked
+    % @param expectedAncestor    the expected ancestor node
+    % @param nodeToCheck         the node whose ancestor is being checked
     %
-    % @return boolean value representing whether nodeToCheck extends expectedParent
+    % @return boolean value representing whether nodeToCheck extends expectedAncestor
     %
     %%%
-    extends(expectedParent, nodeToCheck) = parentLink(nodeToCheck) == nodeID(expectedParent);
-    (expectedParent == nullNode || nodeToCheck == nullNode) -> extends(expectedParent, nodeToCheck) = false;
+    (parentLink(nodeToCheck) == 0) -> extends(expectedAncestor, nodeToCheck) = false;
+    (parentLink(nodeToCheck) == nodeID(expectedAncestor)) -> extends(expectedAncestor, nodeToCheck) = true;
+    extends(expectedAncestor, nodeToCheck) = extends(expectedAncestor, parentLink(nodeToCheck));
 
     %%%
     % Function to retrieve the quorum certificate associated with the highest view number between two quorum 
@@ -191,64 +192,82 @@ act
     send_broadcast, receive_broadcast_to_forward, broadcast_sent, forward_broadcast, receive_broadcast, 
     broadcast_received: Message # Pos # Pos;
 
-%%%%
-% Process for initialising the non-faulty replicas
-%
-% @param id                  the ID of the replica
-% @param currentView         the view of the protocol in which the replica is in
-% @param lockedQC            most recent signed QC that the replica received 
-%                            initially it constains the QC for view 0 and root node (1, 0, 0)
-% @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)    
-% @param currentLeader       leader of the current view    
-%%%%
-proc ReplicaNewView(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, currentLeader: Pos) = 
-    % A newView message from view 0 is assumed when the protocol is initiated
-    send_message(createMessage(newView, currentView, nullNode, prepareQC, nullSignature), id, currentLeader) . 
-    ReplicaPrepare(id, currentView + 1, lockedQC, prepareQC, currentLeader);
+proc
+    %%%%
+    % Process to serve as a channel
+    %
+    % @param broadcastCount      initialize with -1 (waiting state), keeps count of total broadcasts sent out once invoked
+    % @param broadcastMessage    initialize is ignored; message to be broadcasted
+    % @param n                   initialize with total replicas, total number of broadcasts
+    %
+    %%%%
+    Channel = 
 
-%%%%
-% Process for the prepare phase of the non-faulty replicas
-%
-% @param id                  the ID of the replica
-% @param currentView         the view of the protocol in which the replica is in
-% @param lockedQC            most recent signed QC that the replica received 
-% @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)    
-% @param currentLeader       leader of the current view    
-%%%%
-proc ReplicaPrepare(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, currentLeader: Pos ) = 
-    sum message: Message -> receive_broadcast(message, currentLeader, id).
-                            % Check validity of message
-                            (matchingMessage(message, prepare, currentView) && 
-                            % Check validity of node 
-                             extends(node(mJustify(message), node(message))) && 
-                             safeNode(node(message), lockedQC, mJustify(message))) -> 
-                            send_message()
+    %%%%
+    % Process for initialising the non-faulty replicas
+    %
+    % @param id                  the ID of the replica
+    % @param currentView         the view of the protocol in which the replica is in
+    % @param lockedQC            most recent signed QC that the replica received 
+    %                            initially it constains the QC for view 0 and root node (0, 0, 0)
+    % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)    
+    % @param currentLeader       leader of the current view    
+    %%%%
+    ReplicaNewView(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, currentLeader: Pos) = 
+        % A newView message from view 0 is assumed when the protocol is initiated
+        send_message(createMessage(newView, currentView, nullNode, prepareQC, NullSignature), id, currentLeader) . 
+        ReplicaPrepare(id, currentView + 1, lockedQC, prepareQC, currentLeader);
 
-%%%%
-% Process for the initializing the leader 
-%
-% @param id                  the ID of the replica that has a leader role in the current view
-% @param currentView         the view of the protocol in which the replica is in
-% @param receivedMsgFrom     list of replicas that sent a newView message to the leader
-% @param highQC              the highest prepareQC received from replicas
-% @param counterCommand      index that keeps track of the next command that needs to be executed and of the next nodeID
-%%%%
-proc LeaderPrepare(id : Pos, currentView: Nat, receivedMsgFrom: List(Pos), highQC: QC, counterCommand: Nat) = 
+    %%%%
+    % Process for the prepare phase of the non-faulty replicas
+    %
+    % @param id                  the ID of the replica
+    % @param currentView         the view of the protocol in which the replica is in
+    % @param lockedQC            most recent signed QC that the replica received 
+    % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)    
+    % @param currentLeader       leader of the current view    
+    %%%%
+    ReplicaPrepare(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC, currentLeader: Pos ) = 
+        sum message: Message . 
+        receive_broadcast(message, currentLeader, id) .
+            % Check validity of message
+            (matchingMessage(message, prepare, currentView) && 
+            % Check validity of node 
+            extends(node(mJustify(message), node(message))) && safeNode(node(message), lockedQC, mJustify(message))) ->
+                send_message(createMessage(prepare, currentView, node(message), NullQC, createSignate(id)), id,
+                currentLeader).delta; %ReplicaPreCommit(id, currentView, lockedQC, prepareQC, currentLeader);
+    % TO DO: wait for timeout
 
-    sum message: Message . sum sender: Pos . sum receiver: Pos
-    receive_message(message, sender, receiver). 
-    % Message was for a previous leader or it is an invalid message
-    ((receiver != id) || ((sender <= N && matchingMessage(message, newView, currentView - 1)) == false)) ->  
-        LeaderPrepare(id, currentView, receiveMsgFrom, highQC, counterCommand) 
-    % Message is for current leader 
-    <> 
-        % Leader did not receive enough newView messages, it waits for more messages
-        (#receivedMsgFrom < n - f) -> 
+    %%%%
+    % Process for the initializing the leader 
+    %
+    % @param id                  the ID of the replica that has a leader role in the current view
+    % @param currentView         the view of the protocol in which the replica is in
+    % @param receivedMsgFrom     list of replicas that sent a newView message to the leader
+    % @param highQC              the highest prepareQC received from replicas
+    % @param counterCommand      index that keeps track of the next command that needs to be executed 
+    %                            and of the next nodeID
+    %%%%
+    LeaderPrepare(id : Pos, currentView: Nat, receivedMsgFrom: List(Pos), highQC: QC, counterCommand: Nat) =
+        sum message: Message . sum sender: Pos . sum receiver: Pos .
+        receive_message(message, sender, receiver) .
+        % Message was for a previous leader or it is an invalid message
+        ((receiver != id) || ((sender <= N && matchingMessage(message, newView, currentView - 1)) == false)) ->
+            LeaderPrepare(id, currentView, receiveMsgFrom, highQC, counterCommand)
+        % Message is for current leader 
+        <> 
+            % Leader did not receive enough newView messages, it waits for more messages
+        (
+            (#receivedMsgFrom < n - f) -> 
             LeaderPrepare(id, currentView, receiveMsgFrom <| sender, highestQC(highQC, mJustify(message)),
                             counterCommand)
 
-        % Leader received n - f correct newView messages, it can move to the next phase
-        <>
-            send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, COMMAND_LIST.counterCommand,
-            nodeID(node(highQC))), highQC, nullSignature)).
-            LeaderPreCommit(id, currentView, [], highQC, counterCommand);
+            % Leader received n - f correct newView messages, it can move to the next phase
+            <>
+            (
+                send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, 
+                COMMAND_LIST.counterCommand, nodeID(node(highQC))), highQC, NullSignature)).
+                % LeaderPreCommit(id, currentView, [], highQC, counterCommand + 1)
+                delta
+            )
+        );
