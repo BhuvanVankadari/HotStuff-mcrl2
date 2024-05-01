@@ -37,6 +37,11 @@ sort
     % primitives it relies on).
     Signature = struct createSignature(replicaID: Pos)
                      | NullSignature;
+    
+    % Data structure for message queue
+    %
+    % When the Channel receives a broadcast, it stores the message with its sender to forward it to all replicas
+    messageTuple = struct createMessageTuple(message: Message, sender: Pos);
 
 % Constant declarations
 map
@@ -60,7 +65,7 @@ map
     % List of valid message types
     %
     % List that a faulty replica uses to randomly sample from to decide on the message type
-    MESSAGE_LIST: List(Message_type);
+    MESSAGE_LIST: List(MessageType);
 
     % List of leader scheme to aid in the rotating leader scheme
     %
@@ -70,11 +75,11 @@ map
 % Constant assignments
 eqn
     N = 3;
-    F = 1;
+    F = 0;
     NUM_VIEWS = 3;
-    COMMAND_LIST = [1, 2, 3]
+    COMMAND_LIST = [1, 2, 3];
     MESSAGE_LIST = [newView, prepare, preCommit, commit, decide];
-    LEADER_SCHEME = [1, 2, 3, 4, 5];
+    LEADER_SCHEME = [1, 2, 2];
 
 % Function declarations
 map
@@ -189,19 +194,34 @@ eqn
 act
     % Actions for sending a message. The data assciated with each action is: the message, the sender, the receiver
     send_message, receive_message_to_forward, message_sent, forward_message, receive_message, message_received, 
-    send_broadcast, receive_broadcast_to_forward, broadcast_sent, forward_broadcast, receive_broadcast, 
-    broadcast_received: Message # Pos # Pos;
-
+    forward_broadcast, receive_broadcast, broadcast_received: Message # Pos # Pos;
+    %Actions for sending a broadcast. The data associated with each action is: the message, the sender
+    send_broadcast, receive_broadcast_to_forward, broadcast_sent: Message # Pos;
 proc
-    %%%%
+    %%%% TODODODODODODODODODODODODO
     % Process to serve as a channel
     %
-    % @param broadcastCount      initialize with -1 (waiting state), keeps count of total broadcasts sent out once invoked
+    % @param broadcastCount      initialize with -1 (waiting state), keeps count of total broadcasts sent out once
+    %                            invoked
     % @param broadcastMessage    initialize is ignored; message to be broadcasted
     % @param n                   initialize with total replicas, total number of broadcasts
     %
     %%%%
-    Channel = 
+    Channel(broadcastedToReplica: List(Pos), messageQueue: List(messageTuple)) =
+        sum message: Message. sum sender, receiver: Pos. receive_message_to_forward(message, sender, receiver). 
+        forward_message(message, sender, receiver)
+        +
+        sum message: Message. sum sender: Pos. receive_broadcast_to_forward(message, sender) .
+        Channel(broadcastedToReplica, messageQueue <| createMessageTuple(message, sender))
+        +
+        (#broadcastedToReplica < n - 1 && #messageQueue > 0) -> sum receiver: Pos . 
+        (receiver in broadcastedToReplica == false) -> 
+            forward_broadcast(message(messageQueue), sender(messageQueue), receiver).Channel(broadcastedToReplica <| 
+            receiver, messageQueue)
+        +
+        (#broadcastedToReplica == n - 1 && #messageToForward > 0) -> sum receiver: Pos . 
+        (receiver in broadcastedToReplica == false) ->
+            forward_broadcast(message(messageQueue), sender(messageQueue), receiver).Channel([], tail(messageQueue));
 
     %%%%
     % Process for initialising the non-faulty replicas
@@ -271,3 +291,19 @@ proc
                 delta
             )
         );
+        
+init 
+    allow(
+        {message_sent, message_received, broadcast_sent, broadcast_received},
+	    comm({ 
+            send_message | receive_message_to_forward -> message_sent,
+		    forward_message | receive_message -> message_received,
+			send_broadcast | receive_broadcast_to_forward -> broadcast_sent,
+			forward_broadcast | receive_broadcast -> broadcast_received
+			},
+			ReplicaNewView(1, 0, createQC(newView, 0, createNode(0, 0, 0), N))||
+			ReplicaNewView(2, 0, createQC(newView, 0, createNode(0, 0, 0), N)) ||
+            ReplicaNewView(3, 0, createQC(newView, 0, createNode(0, 0, 0), N)) ||
+		    LeaderPrepare(1, 1, [], NullQC, 0) ||
+			Channel([], [])
+	 ));
