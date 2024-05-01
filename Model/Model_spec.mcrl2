@@ -199,13 +199,11 @@ act
     %Actions for sending a broadcast. The data associated with each action is: the message, the sender
     send_broadcast, receive_broadcast_to_forward, broadcast_sent: Message # Pos;
 proc
-    %%%% TODODODODODODODODODODODODO
+    %%%% 
     % Process to serve as a channel
     %
-    % @param broadcastCount      initialize with -1 (waiting state), keeps count of total broadcasts sent out once
-    %                            invoked
-    % @param broadcastMessage    initialize is ignored; message to be broadcasted
-    % @param n                   initialize with total replicas, total number of broadcasts
+    % @param broadcastedToReplica replicas to which the channel forwarded the broadcast
+    % @param messageQueue         queue of messages to be broadasted, contains the message and the corresponding sender
     %
     %%%%
     Channel(broadcastedToReplica: List(Pos), messageQueue: List(messageTuple)) =
