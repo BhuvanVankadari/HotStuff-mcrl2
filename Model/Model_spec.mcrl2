@@ -201,12 +201,12 @@ proc
     %%%% 
     % Process to serve as a channel
     %
-    % @param broadcastedToReplica replicas to which the channel forwarded the broadcast
-    % @param messageQueue         queue of messages to be broadasted, contains the message and the corresponding sender
-    % @param counterBroadcastReplica 
+    % @param messageQueue        queue of messages to be broadasted, contains the message and the corresponding sender
+    % @param broadcastCount      the ID of the next replica to broadcast to. After a broadcast is finished, this counter
+    %                            is reset to 1.
     %
     %%%%
-    Channel(broadcastedToReplica: List(Pos), messageQueue: List(messageTuple), counterBroadcastReplica: Pos) =
+    Channel(messageQueue: List(messageTuple), broadcastCount: Pos) =
         % I think when the channel is broadcasting, it should finish broadcasting and only then move on perhaps
         % handling a single message send request. We can add messages to the queue, but either of them should not
         % be interrupted I think.
@@ -214,33 +214,26 @@ proc
         sum receivedMessage: Message. sum s, r: Pos . (r <= N && s <= N) ->
             (
                 receive_message_to_forward(receivedMessage, s, r) . 
-                forward_message(receivedMessage, s, r)
+                forward_message(receivedMessage, s, r) .
+                Channel(messageQueue, broadcastCount)
             )
         +
         sum receivedMessage: Message. sum s: Pos . (s <= N) ->
             (
                 receive_broadcast_to_forward(receivedMessage, s) .
-                Channel(broadcastedToReplica, messageQueue <| createMessageTuple(receivedMessage, s))
+                Channel(messageQueue <| createMessageTuple(receivedMessage, s), broadcastCount)
             )
         +
-        (#broadcastedToReplica < N - 1 && #messageQueue > 0) ->
+        (broadcastCount < N && #messageQueue > 0) ->
             (
-                sum r: Pos . (r <= N) ->
-                    (
-                        !(r in broadcastedToReplica)) -> 
-                        forward_broadcast(message(head(messageQueue)), sender(head(messageQueue)), r) . 
-                        Channel(broadcastedToReplica <| r, messageQueue
-                    )
+                forward_broadcast(message(head(messageQueue)), sender(head(messageQueue)), broadcastCount) . 
+                Channel(messageQueue, broadcastCount + 1)
             )
         +
-        (#broadcastedToReplica == N - 1 && #messageQueue > 0) ->
+        (broadcastCount == N && #messageQueue > 0) ->
             (
-                sum r: Pos . (r <= N) ->
-                    (
-                        !(r in broadcastedToReplica)) ->
-                        forward_broadcast(message(head(messageQueue)), sender(head(messageQueue)), r) . 
-                        Channel([], tail(messageQueue)
-                    )
+                forward_broadcast(message(head(messageQueue)), sender(head(messageQueue)), broadcastCount) . 
+                Channel(tail(messageQueue), 1)
             );
 
     %%%%
@@ -334,5 +327,5 @@ init
             ReplicaNewView(3, 0, createQC(newView, 0, createNode(0, 0, NullNode), N),  createQC(newView, 0,
             createNode(0, 0, NullNode), N), 1) ||
 		    LeaderPrepare(1, 1, [], NullQC, 0) ||
-			Channel([], [])
+			Channel([], 1)
 	 ));
