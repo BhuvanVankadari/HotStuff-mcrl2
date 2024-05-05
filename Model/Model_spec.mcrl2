@@ -189,7 +189,7 @@ eqn
     matchingQC(QCToCheck, expectedMsgType, expectedViewNum) =
         (expectedMsgType == type(QCToCheck)) &&
         (expectedViewNum == viewNumber(QCToCheck));
-
+act test;
 act
     % Actions for sending a message. The data assciated with each action is: the message, the sender, the receiver
     send_message, receive_message_to_forward, message_sent, forward_message, receive_message, message_received, 
@@ -285,35 +285,41 @@ proc
     %%%%
     LeaderPrepare(id : Pos, currentView: Nat, receivedMsgFrom: List(Pos), highQC: QC, counterCommand: Nat) =
         sum receivedMessage: Message . sum s, r: Pos .
-        ( (r <= N && s <= N) ->
-        receive_message(receivedMessage, s, r) .      % newView, view : 0, NullNode, NullQC, NullSig
         (
-            % Message was for a previous leader or it is an invalid message
-            ((r != id) || (!(s <= N && matchingMessage(receivedMessage, newView, Int2Nat(currentView - 1))))) ->
-                LeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand)
-            % Message is for current leader 
-            +
-            ((r == id) && (s <= N) && matchingMessage(receivedMessage, newView, Int2Nat(currentView - 1))) ->
-                    % Leader did not receive enough newView messages, it waits for more messages
+            (r <= N && s <= N) ->
+                receive_message(receivedMessage, s, r) .
                 (
-                    (#receivedMsgFrom < N - F) -> 
-                    LeaderPrepare(id, currentView, receivedMsgFrom <| s, highestQC(highQC, mJustify(receivedMessage)),
-                                  counterCommand)
-
-                    % Leader received N - F correct newView messages, it can move to the next phase
-                    <>
-                    (
-                        send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, 
-                        COMMAND_LIST.counterCommand, node(highQC)), highQC, NullSignature), id).
-                        % LeaderPreCommit(id, currentView, [], highQC, counterCommand + 1)
-                        delta
-                    )
+                    % Message was for a previous leader or it is an invalid message
+                    ((r != id) || (!(s <= N && matchingMessage(receivedMessage, newView, Int2Nat(currentView - 1))))) ->
+                        LeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand) 
+                    +
+                    % Message is for current leader
+                    ((r == id) && (s <= N) && matchingMessage(receivedMessage, newView, Int2Nat(currentView - 1))) ->
+                        % Leader did not receive enough newView messages, it waits for more messages
+                        (
+                            (#receivedMsgFrom < N - F) -> 
+                                (
+                                    LeaderPrepare(id, currentView, receivedMsgFrom <| s, highestQC(highQC,
+                                                mJustify(receivedMessage)), counterCommand)
+                                )   
+                        )
                 )
-        ));
+        )
+        +
+        (
+            % Leader received N - F correct newView messages, it can move to the next phase 
+            (#receivedMsgFrom == N - F) ->               
+                (
+                    send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, 
+                    COMMAND_LIST.counterCommand, node(highQC)), highQC, NullSignature), id).
+                    % LeaderPreCommit(id, currentView, [], highQC, counterCommand + 1)
+                    delta
+                )
+        );
         
 init 
     allow(
-        {message_sent, message_received, broadcast_sent, broadcast_received},
+        {message_sent, message_received, broadcast_sent, broadcast_received, test},
 	    comm({ 
             send_message | receive_message_to_forward -> message_sent,
 		    forward_message | receive_message -> message_received,
