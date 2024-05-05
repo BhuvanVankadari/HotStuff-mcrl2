@@ -207,10 +207,6 @@ proc
     %
     %%%%
     Channel(messageQueue: List(messageTuple), broadcastCount: Pos) =
-        % I think when the channel is broadcasting, it should finish broadcasting and only then move on perhaps
-        % handling a single message send request. We can add messages to the queue, but either of them should not
-        % be interrupted I think.
-        
         sum receivedMessage: Message. sum s, r: Pos . (r <= N && s <= N) ->
             (
                 receive_message_to_forward(receivedMessage, s, r) . 
