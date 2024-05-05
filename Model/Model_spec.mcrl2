@@ -196,6 +196,7 @@ act
     forward_broadcast, receive_broadcast, broadcast_received: Message # Pos # Pos;
     %Actions for sending a broadcast. The data associated with each action is: the message, the sender
     send_broadcast, receive_broadcast_to_forward, broadcast_sent: Message # Pos;
+
 proc
     %%%% 
     % Process to serve as a channel
@@ -205,20 +206,21 @@ proc
     %
     %%%%
     Channel(broadcastedToReplica: List(Pos), messageQueue: List(messageTuple)) =
-        sum receivedMessage: Message. sum s, r: Pos. receive_message_to_forward(receivedMessage, s, r) . 
+        sum receivedMessage: Message. sum s, r: Pos . receive_message_to_forward(receivedMessage, s, r) . 
         forward_message(receivedMessage, s, r)
         +
-        sum receivedMessage: Message. sum s: Pos. receive_broadcast_to_forward(receivedMessage, s) .
+        sum receivedMessage: Message. sum s: Pos . receive_broadcast_to_forward(receivedMessage, s) .
         Channel(broadcastedToReplica, messageQueue <| createMessageTuple(receivedMessage, s))
         +
         (#broadcastedToReplica < N - 1 && #messageQueue > 0) -> sum r: Pos . 
         (!(r in broadcastedToReplica)) -> 
-            forward_broadcast(message(head(messageQueue)), sender(head(messageQueue)), r).Channel(broadcastedToReplica <| 
-            r, messageQueue)
+            forward_broadcast(message(head(messageQueue)), sender(head(messageQueue)), r) . 
+            Channel(broadcastedToReplica <| r, messageQueue)
         +
         (#broadcastedToReplica == N - 1 && #messageQueue > 0) -> sum r: Pos . 
         (!(r in broadcastedToReplica)) ->
-            forward_broadcast(message(head(messageQueue)), sender(head(messageQueue)), r).Channel([], tail(messageQueue));
+            forward_broadcast(message(head(messageQueue)), sender(head(messageQueue)), r) . 
+            Channel([], tail(messageQueue));
 
     %%%%
     % Process for initialising the non-faulty replicas
@@ -250,9 +252,11 @@ proc
             % Check validity of message
             (matchingMessage(receivedMessage, prepare, currentView) && 
             % Check validity of node 
-            extends(node(mJustify(receivedMessage)), node(receivedMessage)) && safeNode(node(receivedMessage), lockedQC, mJustify(receivedMessage))) ->
-                send_message(createMessage(prepare, currentView, node(receivedMessage), NullQC, createSignature(id)), id,
-                currentLeader).delta; %ReplicaPreCommit(id, currentView, lockedQC, prepareQC, currentLeader);
+            extends(node(mJustify(receivedMessage)), node(receivedMessage)) && 
+                safeNode(node(receivedMessage), lockedQC, mJustify(receivedMessage))) ->
+                    send_message(createMessage(prepare, currentView, node(receivedMessage), NullQC,
+                                 createSignature(id)), id, currentLeader) . delta;
+                    % ReplicaPreCommit(id, currentView, lockedQC, prepareQC, currentLeader);
     % TO DO: wait for timeout
 
     %%%%
@@ -279,7 +283,7 @@ proc
                 (
                     (#receivedMsgFrom < N - F) -> 
                     LeaderPrepare(id, currentView, receivedMsgFrom <| s, highestQC(highQC, mJustify(receivedMessage)),
-                                    counterCommand)
+                                  counterCommand)
 
                     % Leader received N - F correct newView messages, it can move to the next phase
                     <>
