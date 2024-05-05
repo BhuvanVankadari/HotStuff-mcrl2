@@ -203,24 +203,45 @@ proc
     %
     % @param broadcastedToReplica replicas to which the channel forwarded the broadcast
     % @param messageQueue         queue of messages to be broadasted, contains the message and the corresponding sender
+    % @param counterBroadcastReplica 
     %
     %%%%
-    Channel(broadcastedToReplica: List(Pos), messageQueue: List(messageTuple)) =
-        sum receivedMessage: Message. sum s, r: Pos . receive_message_to_forward(receivedMessage, s, r) . 
-        forward_message(receivedMessage, s, r)
+    Channel(broadcastedToReplica: List(Pos), messageQueue: List(messageTuple), counterBroadcastReplica: Pos) =
+        % I think when the channel is broadcasting, it should finish broadcasting and only then move on perhaps
+        % handling a single message send request. We can add messages to the queue, but either of them should not
+        % be interrupted I think.
+        
+        sum receivedMessage: Message. sum s, r: Pos . (r <= N && s <= N) ->
+            (
+                receive_message_to_forward(receivedMessage, s, r) . 
+                forward_message(receivedMessage, s, r)
+            )
         +
-        sum receivedMessage: Message. sum s: Pos . receive_broadcast_to_forward(receivedMessage, s) .
-        Channel(broadcastedToReplica, messageQueue <| createMessageTuple(receivedMessage, s))
+        sum receivedMessage: Message. sum s: Pos . (s <= N) ->
+            (
+                receive_broadcast_to_forward(receivedMessage, s) .
+                Channel(broadcastedToReplica, messageQueue <| createMessageTuple(receivedMessage, s))
+            )
         +
-        (#broadcastedToReplica < N - 1 && #messageQueue > 0) -> sum r: Pos . 
-        (!(r in broadcastedToReplica)) -> 
-            forward_broadcast(message(head(messageQueue)), sender(head(messageQueue)), r) . 
-            Channel(broadcastedToReplica <| r, messageQueue)
+        (#broadcastedToReplica < N - 1 && #messageQueue > 0) ->
+            (
+                sum r: Pos . (r <= N) ->
+                    (
+                        !(r in broadcastedToReplica)) -> 
+                        forward_broadcast(message(head(messageQueue)), sender(head(messageQueue)), r) . 
+                        Channel(broadcastedToReplica <| r, messageQueue
+                    )
+            )
         +
-        (#broadcastedToReplica == N - 1 && #messageQueue > 0) -> sum r: Pos . 
-        (!(r in broadcastedToReplica)) ->
-            forward_broadcast(message(head(messageQueue)), sender(head(messageQueue)), r) . 
-            Channel([], tail(messageQueue));
+        (#broadcastedToReplica == N - 1 && #messageQueue > 0) ->
+            (
+                sum r: Pos . (r <= N) ->
+                    (
+                        !(r in broadcastedToReplica)) ->
+                        forward_broadcast(message(head(messageQueue)), sender(head(messageQueue)), r) . 
+                        Channel([], tail(messageQueue)
+                    )
+            );
 
     %%%%
     % Process for initialising the non-faulty replicas
@@ -271,6 +292,7 @@ proc
     %%%%
     LeaderPrepare(id : Pos, currentView: Nat, receivedMsgFrom: List(Pos), highQC: QC, counterCommand: Nat) =
         sum receivedMessage: Message . sum s, r: Pos .
+        ( (r <= N && s <= N) ->
         receive_message(receivedMessage, s, r) .      % newView, view : 0, NullNode, NullQC, NullSig
         (
             % Message was for a previous leader or it is an invalid message
@@ -294,7 +316,7 @@ proc
                         delta
                     )
                 )
-        );
+        ));
         
 init 
     allow(
@@ -305,9 +327,12 @@ init
 			send_broadcast | receive_broadcast_to_forward -> broadcast_sent,
 			forward_broadcast | receive_broadcast -> broadcast_received
 			},
-			ReplicaNewView(1, 0, createQC(newView, 0, createNode(0, 0, NullNode), N),  createQC(newView, 0, createNode(0, 0, NullNode), N), 1)||
-			ReplicaNewView(2, 0, createQC(newView, 0, createNode(0, 0, NullNode), N),  createQC(newView, 0, createNode(0, 0, NullNode), N), 1) ||
-            ReplicaNewView(3, 0, createQC(newView, 0, createNode(0, 0, NullNode), N),  createQC(newView, 0, createNode(0, 0, NullNode), N), 1) ||
+			ReplicaNewView(1, 0, createQC(newView, 0, createNode(0, 0, NullNode), N),  createQC(newView, 0, 
+            createNode(0, 0, NullNode), N), 1)||
+			ReplicaNewView(2, 0, createQC(newView, 0, createNode(0, 0, NullNode), N),  createQC(newView, 0,
+            createNode(0, 0, NullNode), N), 1) ||
+            ReplicaNewView(3, 0, createQC(newView, 0, createNode(0, 0, NullNode), N),  createQC(newView, 0,
+            createNode(0, 0, NullNode), N), 1) ||
 		    LeaderPrepare(1, 1, [], NullQC, 0) ||
 			Channel([], [])
 	 ));
