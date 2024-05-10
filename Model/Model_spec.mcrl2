@@ -270,6 +270,25 @@ proc
     % TO DO: wait for timeout
 
     %%%%
+    % Process for initialising the faulty replicas
+    %
+    % @param id                  the ID of the replica
+    % @param currentView         the view of the protocol in which the replica is in
+    % @param lockedQC            most recent signed QC that the replica received 
+    %                            initially it constains the QC for view 0 and root node (0, 0, NullNode)
+    % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)    
+    % @param currentLeader       leader of the current view    
+    %%%%
+    FaultyReplicaNewView(id: Pos, currentView: Nat, lockedQC: QC, prepareQC: QC, currentLeader: Pos) = 
+        % A newView message from view 0 is assumed when the protocol is initiated
+        send_message(createMessage(newView, currentView, NullNode, prepareQC, NullSignature), id, currentLeader) . 
+        delta%ReplicaPrepare(id, currentView + 1, lockedQC, prepareQC, currentLeader) 
+        +
+        % Faulty replica not sending the message
+        delta %FaultyReplicaPrepare(id, currentView + 1, lockedQC, prepareQC, currentLeader)
+        
+        ;
+    %%%%
     % Process for the initializing the leader 
     %
     % @param id                  the ID of the replica that has a leader role in the current view
