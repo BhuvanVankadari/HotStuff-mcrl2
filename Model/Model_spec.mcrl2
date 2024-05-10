@@ -284,6 +284,7 @@ proc
         send_message(createMessage(newView, currentView, NullNode, prepareQC, NullSignature), id, currentLeader) . 
         delta%ReplicaPrepare(id, currentView + 1, lockedQC, prepareQC, currentLeader) 
         +
+        
         % Faulty replica not sending the message
         delta %FaultyReplicaPrepare(id, currentView + 1, lockedQC, prepareQC, currentLeader)
         
