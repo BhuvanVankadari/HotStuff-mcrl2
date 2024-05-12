@@ -201,7 +201,7 @@ act
     send_broadcast, receive_broadcast_to_forward, broadcast_sent: Message # Pos;
 
     % Actions for leader status
-    sendLeaderStatus, receiveLeaderStatus, shareLeaderStatus: Bool # Pos;
+    sendLeaderStatus, receiveLeaderStatus, shareLeaderStatus: Bool # Pos # Nat;
 
 proc
     %%%% 
@@ -248,7 +248,7 @@ proc
     % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)    
     %%%%
     ReplicaNewView(id: Pos, currentView: Nat, lockedQC: QC, prepareQC: QC) = 
-        sendLeaderStatus(LEADER_SCHEME.(currentView + 1) == id, id).
+        sendLeaderStatus(LEADER_SCHEME.(currentView + 1) == id, id, currentView + 1).
         % A newView message from view 0 is assumed when the protocol is initiated
         send_message(createMessage(newView, currentView, NullNode, prepareQC, NullSignature), id, 
                      LEADER_SCHEME.(currentView + 1)) .  
@@ -298,27 +298,35 @@ proc
     %
     % @param id                  the ID of the replica that has a leader role in the current view
     % @param currentView         the view of the protocol in which the replica is in
+    % @param highQC              the highest prepareQC received from replicas
+    % @param counterCommand      index that keeps track of the next command that needs to be executed 
+    %                            and of the next nodeID
+    %
+    %%%%
+    LeaderNewView(id : Pos, currentView: Nat, highQC: QC, counterCommand: Nat) =
+        sum receivedLeaderStatus: Bool, receivedView: Nat .
+        receiveLeaderStatus(receivedLeaderStatus, id, receivedView) .
+        LeaderPrepare(id, receivedView, [], highQC, counterCommand, receivedLeaderStatus);
+
+    %%%%
+    % Process for the leader is the prepare phase
+    %
+    % @param id                  the ID of the replica that has a leader role in the current view
+    % @param currentView         the view of the protocol in which the replica is in
     % @param receivedMsgFrom     list of replicas that sent a newView message to the leader
     % @param highQC              the highest prepareQC received from replicas
     % @param counterCommand      index that keeps track of the next command that needs to be executed 
     %                            and of the next nodeID
+    % @param isLeader            a boolean value indicating whether the replica is a leader depending on the view
+    %
     %%%%
     LeaderPrepare(id : Pos, currentView: Nat, receivedMsgFrom: List(Pos), highQC: QC, counterCommand: Nat, 
                   isLeader: Bool) =
-        (sum receivedLeaderStatus: Bool . receiveLeaderStatus(receivedLeaderStatus, id) .
+        sum receivedMessage: Message . sum s: Pos .
         (
-            (receivedLeaderStatus) -> 
-                LeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand, true)
-            <> 
-                LeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand, false)
-        )
-        )
-        +
-        sum receivedMessage: Message . sum s, r: Pos .
-        (
-            (r <= N && s <= N) ->
+            (s <= N) ->
             (
-                receive_message(receivedMessage, s, r) .
+                receive_message(receivedMessage, s, id) .
                 (isLeader) ->
                 (
                     % It is an invalid message
@@ -352,7 +360,7 @@ proc
         );
         
 init 
-    hide({shareLeaderStatus},
+    % hide({shareLeaderStatus},
         allow({message_sent, message_received, broadcast_sent, broadcast_received, shareLeaderStatus, test},
             comm({
                 send_message | receive_message_to_forward -> message_sent,
@@ -367,8 +375,8 @@ init
                     createNode(0, 0, NullNode), N)) ||
                     ReplicaNewView(3, 0, createQC(newView, 0, createNode(0, 0, NullNode), N),  createQC(newView, 0,
                     createNode(0, 0, NullNode), N)) ||
-                    LeaderPrepare(1, 1, [], NullQC, 0, false) ||
-                    LeaderPrepare(2, 1, [], NullQC, 0, false) ||
-                    LeaderPrepare(3, 1, [], NullQC, 0, false) ||
+                    LeaderNewView(1, 1, NullQC, 0) ||
+                    LeaderNewView(2, 1, NullQC, 0) ||
+                    LeaderNewView(3, 1, NullQC, 0) ||
                     Channel([], 1)
-	 )));
+	 ));
