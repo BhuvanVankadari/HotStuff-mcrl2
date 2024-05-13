@@ -191,8 +191,10 @@ eqn
         (expectedMsgType == type(QCToCheck)) &&
         (expectedViewNum == viewNumber(QCToCheck));
 
-act test;
 act
+    % Action to use while testing
+    test;
+
     % Actions for sending a message. The data assciated with each action is: the message, the sender, the receiver
     send_message, receive_message_to_forward, message_sent, forward_message, receive_message, message_received, 
     forward_broadcast, receive_broadcast, broadcast_received: Message # Pos # Pos;
@@ -203,8 +205,20 @@ act
     % Actions for leader status
     sendLeaderStatus, receiveLeaderStatus, shareLeaderStatus: Bool # Pos # Nat;
 
+    % Actions associated with timeout in the prepare phase
+    timeout_replica_prepare, timeout_leader_prepare, timeout_prepare: Nat;
+
+    % Actions associated with timeout in the preCommit phase
+    timeout_replica_preCommit, timeout_leader_preCommit, timeout_preCommit: Nat;
+
+    % Actions associated with timeout in the commit phase
+    timeout_replica_commit, timeout_leader_commit, timeout_commit: Nat;
+
+    % Actions associated with timeout in the decide phase
+    timeout_replica_decide, timeout_leader_decide, timeout_decide: Nat;
+
 proc
-    %%%% 
+    %%%%
     % Process to serve as a channel
     %
     % @param messageQueue        queue of messages to be broadasted, contains the message and the corresponding sender
@@ -303,9 +317,10 @@ proc
             extends(node(mJustify(receivedMessage)), node(receivedMessage)) && 
                 safeNode(node(receivedMessage), lockedQC, mJustify(receivedMessage))) ->
                     send_message(createMessage(prepare, currentView, node(receivedMessage), NullQC,
-                                 createSignature(id)), id, LEADER_SCHEME.(currentView)) . delta;
+                                 createSignature(id)), id, LEADER_SCHEME.(currentView)) . delta
                     % ReplicaPreCommit(id, currentView, lockedQC, prepareQC, LEADER_SCHEME.(currentView));
     % TO DO: wait for timeout
+        + timeout_replica_prepare(currentView) . delta;
 
     %%%%
     % Process for the prepare phase of the faulty replicas
@@ -328,7 +343,9 @@ proc
                                  createSignature(id)), id, LEADER_SCHEME.(currentView)) . delta
                     + delta
                     % ReplicaPreCommit(id, currentView, lockedQC, prepareQC, LEADER_SCHEME.(currentView));
-        );
+        )
+        +
+        timeout_replica_prepare(currentView) . delta;
     % TO DO: wait for timeout
 
     %%%%
@@ -408,7 +425,7 @@ proc
                 send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, 
                 COMMAND_LIST.counterCommand, node(highQC)), highQC, NullSignature), id) .
                 % LeaderPreCommit(id, currentView, [], highQC, counterCommand + 1, isLeader)
-                delta
+                timeout_leader_prepare(currentView) . delta
             )
         );
 
@@ -468,13 +485,16 @@ proc
         
 init 
     % hide({shareLeaderStatus},
-        allow({message_sent, message_received, broadcast_sent, broadcast_received, shareLeaderStatus, test},
+        allow({message_sent, message_received, broadcast_sent, broadcast_received, shareLeaderStatus, test, 
+               timeout_prepare},
             comm({
                 send_message | receive_message_to_forward -> message_sent,
                 forward_message | receive_message -> message_received,
                 send_broadcast | receive_broadcast_to_forward -> broadcast_sent,
                 forward_broadcast | receive_broadcast -> broadcast_received,
-                sendLeaderStatus | receiveLeaderStatus -> shareLeaderStatus
+                sendLeaderStatus | receiveLeaderStatus -> shareLeaderStatus,
+                timeout_replica_prepare | timeout_replica_prepare | timeout_replica_prepare | timeout_replica_prepare |
+                timeout_leader_prepare -> timeout_prepare
                 },
                     ReplicaNewView(1, 0, createQC(newView, 0, createNode(0, 0, NullNode), N),  createQC(newView, 0, 
                     createNode(0, 0, NullNode), N))||
