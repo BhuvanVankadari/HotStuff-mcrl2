@@ -420,7 +420,7 @@ proc
         +
         (
             % Leader received N - F correct newView messages, it can move to the next phase 
-            (isLeader && #receivedMsgFrom == N - F) ->               
+            (isLeader && #receivedMsgFrom == N - F) ->
             (
                 send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, 
                 COMMAND_LIST.counterCommand, node(highQC)), highQC, NullSignature), id) .
