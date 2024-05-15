@@ -456,7 +456,7 @@ proc
                     <>
                     % Leader did not receive enough newView messages, it waits for more messages
                     (
-                        (#receivedMsgFrom < N - F) -> 
+                        (#receivedMsgFrom < N - F && !(s in receivedMsgFrom)) -> 
                             (
                                 LeaderPrepare(id, currentView, receivedMsgFrom <| s, highestQC(highQC,
                                             mJustify(receivedMessage)), counterCommand, isLeader)
