@@ -309,7 +309,7 @@ proc
     % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)     
     %%%%
     ReplicaPrepare(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC) = 
-        sum receivedMessage: Message . 
+        sum receivedMessage: Message .
         receive_broadcast(receivedMessage, LEADER_SCHEME.(currentView), id) .
             % Check validity of message
             (matchingMessage(receivedMessage, prepare, currentView) && 
@@ -319,6 +319,8 @@ proc
                     send_message(createMessage(prepare, currentView, node(receivedMessage), NullQC,
                                  createSignature(id)), id, LEADER_SCHEME.(currentView)) . delta
                     % ReplicaPreCommit(id, currentView, lockedQC, prepareQC, LEADER_SCHEME.(currentView));
+            <>
+            ReplicaPrepare(id, currentView, lockedQC, prepareQC)
     % TO DO: wait for timeout
         + timeout_replica_prepare(currentView) . delta;
 
@@ -343,6 +345,8 @@ proc
                                  createSignature(id)), id, LEADER_SCHEME.(currentView)) . delta
                     + delta
                     % ReplicaPreCommit(id, currentView, lockedQC, prepareQC, LEADER_SCHEME.(currentView));
+            <>
+            ReplicaPrepare(id, currentView, lockedQC, prepareQC)
         )
         +
         timeout_replica_prepare(currentView) . delta;
@@ -405,7 +409,7 @@ proc
                     <>
                     % Leader did not receive enough newView messages, it waits for more messages
                     (
-                        (#receivedMsgFrom < N - F) -> 
+                        (#receivedMsgFrom < N - F && !(s in receivedMsgFrom)) ->
                             (
                                 LeaderPrepare(id, currentView, receivedMsgFrom <| s, highestQC(highQC,
                                             mJustify(receivedMessage)), counterCommand, isLeader)
@@ -424,8 +428,7 @@ proc
             (
                 send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, 
                 COMMAND_LIST.counterCommand, node(highQC)), highQC, NullSignature), id) .
-                % LeaderPreCommit(id, currentView, [], highQC, counterCommand + 1, isLeader)
-                timeout_leader_prepare(currentView) . delta
+                LeaderPreCommit(id, currentView, [], NullQC, counterCommand + 1, isLeader)
             )
         );
 
@@ -475,11 +478,10 @@ proc
             (
                 send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, 
                 COMMAND_LIST.counterCommand, node(highQC)), highQC, NullSignature), id) .
-                % LeaderPreCommit(id, currentView, [], highQC, counterCommand + 1, isLeader)
-                delta
+                LeaderPreCommit(id, currentView, [], NullQC, counterCommand + 1, isLeader)
                 +
                 % Faulty leader does not send broadcast
-                delta
+                timeout_leader_prepare(currentView) . FaultyLeaderNewView(id, currentView, NullQC, counterCommand)
             )
         );
 
@@ -488,22 +490,52 @@ proc
     %
     % @param id                  the ID of the replica that has a leader role in the current view
     % @param currentView         the view of the protocol in which the replica is in
-    % @param receivedVoteFrom     list of replicas that sent a newView message to the leader
-    % @param highQC              the highest prepareQC received from replicas
+    % @param receivedVoteFrom    list of replicas that sent a newView message to the leader
+    % @param prepareQC           the QC obtained from the votes received
     % @param counterCommand      index that keeps track of the next command that needs to be executed 
     %                            and of the next nodeID
     % @param isLeader            a boolean value indicating whether the replica is a leader depending on the view
     %
     %%%%
-    LeaderPreCommit(id : Pos, currentView: Nat, receivedVoteFrom: List(Pos), highQC: QC, counterCommand: Nat, 
+    LeaderPreCommit(id : Pos, currentView: Nat, receivedVoteFrom: List(Pos), prepareQC: QC, counterCommand: Nat, 
                   isLeader: Bool) =
-        sum vote: Message . sum s: Pos .
+        sum receivedMessage: Message . sum s: Pos .
         (
             (s <= N) ->
             (
-                receive_message
+                receive_message(receivedVoteFrom, s, id) .
+                (isLeader) ->
+                (
+                    % It is an invalid message
+                    (!(s <= N && matchingMessage(receivedMessage, prepare, currentView))) ->
+                        LeaderPreCommit(id, currentView, receivedVoteFrom, prepareQC, counterCommand, isLeader) 
+                    <>
+                    % Leader did not receive enough votes, it waits for more votes
+                    (
+                        (#receivedVoteFrom < N - F && !(s in receivedVoteFrom)) ->
+                            (
+                                LeaderPreCommit(id, currentView, receivedVoteFrom <| s, 
+                                                createQC(type(receivedMessage), viewNumber(receivedMessage), 
+                                                         node(receivedMessage), (#receivedVoteFrom + 1)),
+                                                counterCommand, isLeader)
+                            )
+                    )
+                )
+                <>
+                % Replica is not the leader 
+                LeaderPreCommit(id, currentView, receivedVoteFrom, prepareQC, counterCommand, isLeader)
             )
         )
+        +
+        (
+            % Leader received N - F correct votes, it can move to the next phase
+            (isLeader && #receivedVoteFrom == N - F) ->
+            (
+                send_broadcast(createMessage(preCommit, currentView, NullNode, prepareQC, NullSignature), id) .
+                % LeaderCommit(id, currentView, [], highQC, counterCommand + 1, isLeader)
+                delta
+            )
+        );
         
         
 init 
