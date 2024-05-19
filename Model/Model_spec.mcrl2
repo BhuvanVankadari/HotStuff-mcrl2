@@ -259,7 +259,8 @@ proc
     % @param currentView         the view of the protocol in which the replica is in
     % @param lockedQC            most recent signed QC that the replica received 
     %                            initially it constains the QC for view 0 and root node (0, 0, NullNode)
-    % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)    
+    % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)
+    % 
     %%%%
     ReplicaNewView(id: Pos, currentView: Nat, lockedQC: QC, prepareQC: QC) = 
         % A replica informs the corresponding leader process about its status (leader or not for a view)
@@ -276,7 +277,8 @@ proc
     % @param currentView         the view of the protocol in which the replica is in
     % @param lockedQC            most recent signed QC that the replica received 
     %                            initially it constains the QC for view 0 and root node (0, 0, NullNode)
-    % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)      
+    % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)
+    %
     %%%%
     FaultyReplicaNewView(id: Pos, currentView: Nat, lockedQC: QC, prepareQC: QC) = 
         % A replica informs the corresponding leader process about its status (leader or not for a view)
@@ -306,7 +308,8 @@ proc
     % @param id                  the ID of the replica
     % @param currentView         the view of the protocol in which the replica is in
     % @param lockedQC            most recent signed QC that the replica received 
-    % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)     
+    % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)
+    %
     %%%%
     ReplicaPrepare(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC) = 
         sum receivedMessage: Message .
@@ -317,12 +320,12 @@ proc
             extends(node(mJustify(receivedMessage)), node(receivedMessage)) && 
                 safeNode(node(receivedMessage), lockedQC, mJustify(receivedMessage))) ->
                     send_message(createMessage(prepare, currentView, node(receivedMessage), NullQC,
-                                 createSignature(id)), id, LEADER_SCHEME.(currentView)) . delta
-                    % ReplicaPreCommit(id, currentView, lockedQC, prepareQC, LEADER_SCHEME.(currentView));
+                                 createSignature(id)), id, LEADER_SCHEME.(currentView)) . 
+                    ReplicaPreCommit(id, currentView, lockedQC, prepareQC)
             <>
             ReplicaPrepare(id, currentView, lockedQC, prepareQC)
-    % TO DO: wait for timeout
-        + timeout_replica_prepare(currentView) . delta;
+        +
+        timeout_replica_prepare(currentView) . ReplicaNewView(id, currentView, lockedQC, prepareQC);
 
     %%%%
     % Process for the prepare phase of the faulty replicas
@@ -330,27 +333,130 @@ proc
     % @param id                  the ID of the replica
     % @param currentView         the view of the protocol in which the replica is in
     % @param lockedQC            most recent signed QC that the replica received 
-    % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)     
+    % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)
+    %
     %%%%
     FaultyReplicaPrepare(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC) = 
         sum receivedMessage: Message . 
         receive_broadcast(receivedMessage, LEADER_SCHEME.(currentView), id) .
         (
             % Check validity of message
-            (matchingMessage(receivedMessage, prepare, currentView) && 
+            ((matchingMessage(receivedMessage, prepare, currentView) && 
             % Check validity of node 
             extends(node(mJustify(receivedMessage)), node(receivedMessage)) && 
                 safeNode(node(receivedMessage), lockedQC, mJustify(receivedMessage))) ->
+                    (
+                    % nondeterministically chose between voting for the message (acting as a normal replica) or not 
+                    % voting (faulty replica)
                     send_message(createMessage(prepare, currentView, node(receivedMessage), NullQC,
-                                 createSignature(id)), id, LEADER_SCHEME.(currentView)) . delta
-                    + delta
-                    % ReplicaPreCommit(id, currentView, lockedQC, prepareQC, LEADER_SCHEME.(currentView));
+                                 createSignature(id)), id, LEADER_SCHEME.(currentView)) . 
+                    FaultyReplicaPreCommit(id, currentView, lockedQC, prepareQC)
+                    + 
+                    FaultyReplicaPreCommit(id, currentView, lockedQC, prepareQC)
+                    )
             <>
-            ReplicaPrepare(id, currentView, lockedQC, prepareQC)
+            FaultyReplicaPrepare(id, currentView, lockedQC, prepareQC)
+            )
         )
         +
-        timeout_replica_prepare(currentView) . delta;
-    % TO DO: wait for timeout
+        timeout_replica_prepare(currentView) . FaultyReplicaNewView(id, currentView, lockedQC, prepareQC);
+
+    %%%%
+    % Process for the pre-commit phase of the non-faulty replicas
+    %
+    % @param id                  the ID of the replica
+    % @param currentView         the view of the protocol in which the replica is in
+    % @param lockedQC            most recent signed QC that the replica received 
+    % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)
+    %
+    %%%%
+    ReplicaPreCommit(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC) = 
+        sum receivedMessage: Message .
+        receive_broadcast(receivedMessage, LEADER_SCHEME.(currentView), id) .
+            % Check validity of message
+            ((matchingQC(mJustify(receivedMessage), prepare, currentView)) ->
+            (
+                send_message(createMessage(preCommit, currentView, node(mJustify(receivedMessage)), NullQC,
+                                createSignature(id)), id, LEADER_SCHEME.(currentView)) .
+                ReplicaCommit(id, currentView, lockedQC, mJustify(receivedMessage))
+            )
+            <>
+            ReplicaPreCommit(id, currentView, lockedQC, prepareQC)
+            )
+        +
+        timeout_replica_preCommit(currentView) . ReplicaNewView(id, currentView, lockedQC, prepareQC);
+
+    %%%%
+    % Process for the pre-commit phase of the faulty replicas
+    %
+    % @param id                  the ID of the replica
+    % @param currentView         the view of the protocol in which the replica is in
+    % @param lockedQC            most recent signed QC that the replica received 
+    % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)
+    %
+    %%%%
+    FaultyReplicaPreCommit(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC) = 
+        sum receivedMessage: Message .
+        receive_broadcast(receivedMessage, LEADER_SCHEME.(currentView), id) .
+            % Check validity of message
+            (matchingQC(mJustify(receivedMessage), prepare, currentView)) ->
+            (
+                    send_message(createMessage(preCommit, currentView, node(mJustify(receivedMessage)), NullQC,
+                                 createSignature(id)), id, LEADER_SCHEME.(currentView)) .
+                    FaultyReplicaCommit(id, currentView, lockedQC, mJustify(receivedMessage))
+            )
+            <>
+            FaultyReplicaPreCommit(id, currentView, lockedQC, prepareQC)
+        +
+        timeout_replica_preCommit(currentView) . FaultyReplicaNewView(id, currentView, lockedQC, prepareQC);
+
+    %%%%
+    % Process for the commit phase of the non-faulty replicas
+    %
+    % @param id                  the ID of the replica
+    % @param currentView         the view of the protocol in which the replica is in
+    % @param lockedQC            most recent signed QC that the replica received 
+    % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)
+    %
+    %%%%
+    ReplicaCommit(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC) = 
+        delta;
+
+    %%%%
+    % Process for the commit phase of the faulty replicas
+    %
+    % @param id                  the ID of the replica
+    % @param currentView         the view of the protocol in which the replica is in
+    % @param lockedQC            most recent signed QC that the replica received 
+    % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)
+    %
+    %%%%
+    FaultyReplicaCommit(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC) = 
+        delta;
+
+    %%%%
+    % Process for the decide phase of the non-faulty replicas
+    %
+    % @param id                  the ID of the replica
+    % @param currentView         the view of the protocol in which the replica is in
+    % @param lockedQC            most recent signed QC that the replica received 
+    % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)
+    %
+    %%%%
+    ReplicaDecide(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC) = 
+        delta;
+
+    %%%%
+    % Process for the decide phase of the faulty replicas
+    %
+    % @param id                  the ID of the replica
+    % @param currentView         the view of the protocol in which the replica is in
+    % @param lockedQC            most recent signed QC that the replica received 
+    % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)
+    %
+    %%%%
+    FaultyReplicaDecide(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC) = 
+        delta;
 
     %%%%
     % Process for the initializing the leader 
@@ -417,7 +523,7 @@ proc
                     )
                 )
                 <>
-                % Replica is not the leader 
+                % Replica is not the leader
                 LeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand, isLeader)
             )
         )
@@ -430,6 +536,12 @@ proc
                 COMMAND_LIST.counterCommand, node(highQC)), highQC, NullSignature), id) .
                 LeaderPreCommit(id, currentView, [], NullQC, counterCommand + 1, isLeader)
             )
+        )
+        +
+        % Replica (since this is non-faulty behaviour, the leader part is inactive and times out at the same time as the
+        % corresponding replica) times out and moves to new view
+        (
+        timeout_replica_prepare(currentView) . LeaderNewView(id, currentView, NullQC, counterCommand)
         );
 
     %%%%
@@ -503,7 +615,7 @@ proc
         (
             (s <= N) ->
             (
-                receive_message(receivedVoteFrom, s, id) .
+                receive_message(receivedMessage, s, id) .
                 (isLeader) ->
                 (
                     % It is an invalid message
@@ -532,15 +644,100 @@ proc
             (isLeader && #receivedVoteFrom == N - F) ->
             (
                 send_broadcast(createMessage(preCommit, currentView, NullNode, prepareQC, NullSignature), id) .
-                % LeaderCommit(id, currentView, [], highQC, counterCommand + 1, isLeader)
+                % LeaderCommit(id, currentView, [], highQC, counterCommand, isLeader)
                 delta
             )
+        )
+        +
+        % Replica times out and moves to new view
+        (
+        timeout_replica_preCommit(currentView) . LeaderNewView(id, currentView, NullQC, counterCommand)
         );
+
+    %%%%
+    % Process for the faulty leader in the pre-commit phase
+    %
+    % @param id                  the ID of the replica that has a leader role in the current view
+    % @param currentView         the view of the protocol in which the replica is in
+    % @param receivedVoteFrom    list of replicas that sent a newView message to the leader
+    % @param prepareQC           the QC obtained from the votes received
+    % @param counterCommand      index that keeps track of the next command that needs to be executed 
+    %                            and of the next nodeID
+    % @param isLeader            a boolean value indicating whether the replica is a leader depending on the view
+    %
+    %%%%
+    FaultyLeaderPreCommit(id : Pos, currentView: Nat, receivedVoteFrom: List(Pos), prepareQC: QC, counterCommand: Nat, 
+                  isLeader: Bool) =
+        delta;
+    
+    %%%%
+    % Process for the leader in the commit phase
+    %
+    % @param id                  the ID of the replica that has a leader role in the current view
+    % @param currentView         the view of the protocol in which the replica is in
+    % @param receivedVoteFrom    list of replicas that sent a newView message to the leader
+    % @param prepareQC           the QC obtained from the votes received
+    % @param counterCommand      index that keeps track of the next command that needs to be executed 
+    %                            and of the next nodeID
+    % @param isLeader            a boolean value indicating whether the replica is a leader depending on the view
+    %
+    %%%%
+    LeaderCommit(id : Pos, currentView: Nat, receivedVoteFrom: List(Pos), prepareQC: QC, counterCommand: Nat, 
+                  isLeader: Bool) =
+        delta;
         
+    %%%%
+    % Process for the faulty leader in the commit phase
+    %
+    % @param id                  the ID of the replica that has a leader role in the current view
+    % @param currentView         the view of the protocol in which the replica is in
+    % @param receivedVoteFrom    list of replicas that sent a newView message to the leader
+    % @param prepareQC           the QC obtained from the votes received
+    % @param counterCommand      index that keeps track of the next command that needs to be executed 
+    %                            and of the next nodeID
+    % @param isLeader            a boolean value indicating whether the replica is a leader depending on the view
+    %
+    %%%%
+    FaultyLeaderCommit(id : Pos, currentView: Nat, receivedVoteFrom: List(Pos), prepareQC: QC, counterCommand: Nat, 
+                  isLeader: Bool) =
+        delta;
+        
+    %%%%
+    % Process for the leader in the decide phase
+    %
+    % @param id                  the ID of the replica that has a leader role in the current view
+    % @param currentView         the view of the protocol in which the replica is in
+    % @param receivedVoteFrom    list of replicas that sent a newView message to the leader
+    % @param prepareQC           the QC obtained from the votes received
+    % @param counterCommand      index that keeps track of the next command that needs to be executed 
+    %                            and of the next nodeID
+    % @param isLeader            a boolean value indicating whether the replica is a leader depending on the view
+    %
+    %%%%
+    LeaderDecide(id : Pos, currentView: Nat, receivedVoteFrom: List(Pos), prepareQC: QC, counterCommand: Nat, 
+                  isLeader: Bool) =
+        delta;
+        
+    %%%%
+    % Process for the faulty leader in the commit phase
+    %
+    % @param id                  the ID of the replica that has a leader role in the current view
+    % @param currentView         the view of the protocol in which the replica is in
+    % @param receivedVoteFrom    list of replicas that sent a newView message to the leader
+    % @param prepareQC           the QC obtained from the votes received
+    % @param counterCommand      index that keeps track of the next command that needs to be executed 
+    %                            and of the next nodeID
+    % @param isLeader            a boolean value indicating whether the replica is a leader depending on the view
+    %
+    %%%%
+    FaultyLeaderDecide(id : Pos, currentView: Nat, receivedVoteFrom: List(Pos), prepareQC: QC, counterCommand: Nat, 
+                  isLeader: Bool) =
+        delta;
         
 init 
-    % hide({shareLeaderStatus},
-        allow({message_sent, message_received, broadcast_sent, broadcast_received, shareLeaderStatus, test, 
+    %hide({shareLeaderStatus},
+        allow({
+               message_sent, message_received, broadcast_sent, broadcast_received, shareLeaderStatus, test, 
                timeout_prepare},
             comm({
                 send_message | receive_message_to_forward -> message_sent,
@@ -548,16 +745,18 @@ init
                 send_broadcast | receive_broadcast_to_forward -> broadcast_sent,
                 forward_broadcast | receive_broadcast -> broadcast_received,
                 sendLeaderStatus | receiveLeaderStatus -> shareLeaderStatus,
-                timeout_replica_prepare | timeout_replica_prepare | timeout_replica_prepare | timeout_replica_prepare |
-                timeout_leader_prepare -> timeout_prepare
+                % the number of timeout for replica has to be 2N-1 and for leader it has to be 1, inactive leader
+                % processes are also considered replicas
+                timeout_replica_prepare | timeout_replica_prepare | timeout_replica_prepare | timeout_replica_prepare | 
+                timeout_replica_prepare | timeout_leader_prepare -> timeout_prepare
                 },
-                    ReplicaNewView(1, 0, createQC(newView, 0, createNode(0, 0, NullNode), N),  createQC(newView, 0, 
+                    ReplicaNewView(1, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0, 
                     createNode(0, 0, NullNode), N))||
-                    ReplicaNewView(2, 0, createQC(newView, 0, createNode(0, 0, NullNode), N),  createQC(newView, 0,
+                    ReplicaNewView(2, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
                     createNode(0, 0, NullNode), N)) ||
-                    ReplicaNewView(3, 0, createQC(newView, 0, createNode(0, 0, NullNode), N),  createQC(newView, 0,
+                    ReplicaNewView(3, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
                     createNode(0, 0, NullNode), N)) ||
-                    FaultyReplicaNewView(4, 0, createQC(newView, 0, createNode(0, 0, NullNode), N),  createQC(newView, 0,
+                    FaultyReplicaNewView(4, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
                     createNode(0, 0, NullNode), N)) ||
                     LeaderNewView(1, 1, NullQC, 0) ||
                     LeaderNewView(2, 1, NullQC, 0) ||
