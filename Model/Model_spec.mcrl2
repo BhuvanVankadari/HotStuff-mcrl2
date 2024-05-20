@@ -475,7 +475,19 @@ proc
     %
     %%%%
     ReplicaDecide(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC) = 
-        delta;
+        sum receivedMessage: Message .
+        receive_broadcast(receivedMessage, LEADER_SCHEME.(currentView), id) .
+            % Check validity of message
+            ((matchingQC(mJustify(receivedMessage), commit, currentView)) ->
+            (
+                % TODO: add command execution
+                delta
+            )
+            <>
+            ReplicaNewView(id, currentView, lockedQC, prepareQC)
+            )
+        +
+        timeout_replica_decide(currentView) . ReplicaNewView(id, currentView, lockedQC, prepareQC);
 
     %%%%
     % Process for the decide phase of the faulty replicas
@@ -487,8 +499,18 @@ proc
     %
     %%%%
     FaultyReplicaDecide(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC) = 
-        delta;
-
+        sum receivedMessage: Message .
+        receive_broadcast(receivedMessage, LEADER_SCHEME.(currentView), id) .
+            % Check validity of message
+            (matchingQC(mJustify(receivedMessage), preCommit, currentView)) ->
+            (
+                % TODO: add command execution / skipping command execution
+                delta
+            )
+            <>
+            FaultyReplicaDecide(id, currentView, lockedQC, prepareQC)
+        +
+        timeout_replica_decide(currentView) . FaultyReplicaNewView(id, currentView, lockedQC, prepareQC);
     %%%%
     % Process for the initializing the leader 
     %
