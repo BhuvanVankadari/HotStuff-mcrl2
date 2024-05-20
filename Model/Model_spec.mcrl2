@@ -405,8 +405,11 @@ proc
                                 createSignature(id)), id, LEADER_SCHEME.(currentView)) .
                 FaultyReplicaCommit(id, currentView, lockedQC, mJustify(receivedMessage))
                 +
-                % TODO: mJustify(receivedMessage) or prepareQC when transitioning to the next phase?
+                % TODO: mJustify(receivedMessage) or prepareQC when transitioning to the next phase? maybe we chose 
+                % between saving it or not
                 FaultyReplicaCommit(id, currentView, lockedQC, prepareQC)
+                +
+                FaultyReplicaCommit(id, currentView, lockedQC, mJustify(receivedMessage))
             )
             <>
             FaultyReplicaPreCommit(id, currentView, lockedQC, prepareQC)
@@ -459,6 +462,8 @@ proc
                 +
                 % TODO: mJustify(receivedMessage) or lockedQC when transitioning to the next phase?
                 FaultyReplicaDecide(id, currentView, lockedQC, prepareQC)
+                +
+                FaultyReplicaDecide(id, currentView, mJustify(receivedMessage), prepareQC)
             )
             <>
             FaultyReplicaCommit(id, currentView, lockedQC, prepareQC)
@@ -620,20 +625,20 @@ proc
                 (
                     % It is an invalid message
                     (!(s <= N && matchingMessage(receivedMessage, newView, Int2Nat(currentView - 1)))) ->
-                        LeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand, isLeader) 
+                        FaultyLeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand, isLeader) 
                     <>
                     % Leader did not receive enough newView messages, it waits for more messages
                     (
                         (#receivedMsgFrom < N - F && !(s in receivedMsgFrom)) -> 
                             (
-                                LeaderPrepare(id, currentView, receivedMsgFrom <| s, highestQC(highQC,
+                                FaultyLeaderPrepare(id, currentView, receivedMsgFrom <| s, highestQC(highQC,
                                               mJustify(receivedMessage)), counterCommand, isLeader)
                             )   
                     )
                 )
                 <>
                 % Replica is not the leader 
-                LeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand, isLeader)
+                FaultyLeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand, isLeader)
             )
         )
         +
@@ -643,10 +648,24 @@ proc
             (
                 send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, 
                 COMMAND_LIST.counterCommand, node(highQC)), highQC, NullSignature), id) .
-                LeaderPreCommit(id, currentView, [], NullQC, counterCommand + 1, isLeader)
+                FaultyLeaderPreCommit(id, currentView, [], NullQC, counterCommand + 1, isLeader)
                 +
                 % Faulty leader does not send broadcast
                 timeout_leader_prepare(currentView) . FaultyLeaderNewView(id, currentView, NullQC, counterCommand)
+                % Idea: send node linked to a qc that is not the highest qc TO BE carefeful - if the node is not good it
+                % should not satisffy the safety rule: i.e. make sure it has a lower view num or that it does not extend 
+                % from qc
+                +
+                % Faulty leader tries to reach consensus on an incorrect node (that violates the safe node rule)
+                send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, 
+                COMMAND_LIST.counterCommand, node(NullNode)), NullQC, NullSignature), id) .
+                FaultyLeaderPreCommit(id, currentView, [], NullQC, counterCommand + 1, isLeader)
+                +
+                % Faulty leader tries to reach consensus on node that does not extend lockedQC.node (violates extends 
+                % rule)
+                send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, 
+                COMMAND_LIST.counterCommand, node(NullNode)), highQC, NullSignature), id) .
+                FaultyLeaderPreCommit(id, currentView, [], NullQC, counterCommand + 1, isLeader)
             )
         );
 
@@ -720,7 +739,52 @@ proc
     %%%%
     FaultyLeaderPreCommit(id : Pos, currentView: Nat, receivedVoteFrom: List(Pos), prepareQC: QC, counterCommand: Nat, 
                   isLeader: Bool) =
-        delta;
+        sum receivedMessage: Message . sum s: Pos .
+        (
+            (s <= N) ->
+            (
+                receive_message(receivedMessage, s, id) .
+                (isLeader) ->
+                (
+                    % It is an invalid message
+                    (!(s <= N && matchingMessage(receivedMessage, prepare, Int2Nat(currentView - 1)))) ->
+                        FaultyLeaderPreCommit(id, currentView, receivedVoteFrom, highQC, counterCommand, isLeader) 
+                    <>
+                    % Leader did not receive enough newView messages, it waits for more messages
+                    (
+                        (#receivedMsgFrom < N - F && !(s in receivedMsgFrom)) -> 
+                            (
+                                 FaultyLeaderPreCommit(id, currentView, receivedVoteFrom <| s, 
+                                                createQC(type(receivedMessage), viewNumber(receivedMessage), 
+                                                         node(receivedMessage), (#receivedVoteFrom + 1)),
+                                                         counterCommand, isLeader)
+                            )   
+                    )
+                )
+                <>
+                % Replica is not the leader 
+                FaultyLeaderPreCommit(id, currentView, receivedVoteFrom, highQC, counterCommand, isLeader)
+            )
+        )
+        +
+        (
+             % Leader received N - F correct votes, it can move to the next phase
+            (isLeader && #receivedVoteFrom == N - F) ->
+            (
+                % Faulty replica acts like a non-faulty leader
+                send_broadcast(createMessage(preCommit, currentView, NullNode, prepareQC, NullSignature), id) .
+                FaultyLeaderCommit(id, currentView, [], prepareQC, NullQC, counterCommand, isLeader)
+                +
+                % Faulty leader does not send broadcast
+                timeout_leader_preCommit(currentView) . FaultyLeaderNewView(id, currentView, NullQC, counterCommand)
+                +
+                %TO DO: Think about some incorrect messages
+
+            )
+
+        );
+
+    %%%%
     
     %%%%
     % Process for the leader in the commit phase
