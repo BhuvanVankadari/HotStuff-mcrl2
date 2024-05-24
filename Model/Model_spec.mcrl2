@@ -205,17 +205,8 @@ act
     % Actions for leader status
     sendLeaderStatus, receiveLeaderStatus, shareLeaderStatus: Bool # Pos # Nat;
 
-    % Actions associated with timeout in the prepare phase
-    timeout_replica_prepare, timeout_leader_prepare, timeout_prepare: Nat;
-
-    % Actions associated with timeout in the preCommit phase
-    timeout_replica_preCommit, timeout_leader_preCommit, timeout_preCommit: Nat;
-
-    % Actions associated with timeout in the commit phase
-    timeout_replica_commit, timeout_leader_commit, timeout_commit: Nat;
-
-    % Actions associated with timeout in the decide phase
-    timeout_replica_decide, timeout_leader_decide, timeout_decide: Nat;
+    % Actions associated with the timeout
+    timeout_replica, timeout_leader, timeout: Nat;
 
 proc
     %%%%
@@ -325,7 +316,7 @@ proc
             <>
             ReplicaPrepare(id, currentView, lockedQC, prepareQC)
         +
-        timeout_replica_prepare(currentView) . ReplicaNewView(id, currentView, lockedQC, prepareQC);
+        timeout_replica(currentView) . ReplicaNewView(id, currentView, lockedQC, prepareQC);
 
     %%%%
     % Process for the prepare phase of the faulty replicas
@@ -359,7 +350,7 @@ proc
             )
         )
         +
-        timeout_replica_prepare(currentView) . FaultyReplicaNewView(id, currentView, lockedQC, prepareQC);
+        timeout_replica(currentView) . FaultyReplicaNewView(id, currentView, lockedQC, prepareQC);
 
     %%%%
     % Process for the pre-commit phase of the non-faulty replicas
@@ -384,7 +375,7 @@ proc
             ReplicaPreCommit(id, currentView, lockedQC, prepareQC)
             )
         +
-        timeout_replica_preCommit(currentView) . ReplicaNewView(id, currentView, lockedQC, prepareQC);
+        timeout(currentView) . ReplicaNewView(id, currentView, lockedQC, prepareQC);
 
     %%%%
     % Process for the pre-commit phase of the faulty replicas
@@ -414,7 +405,7 @@ proc
             <>
             FaultyReplicaPreCommit(id, currentView, lockedQC, prepareQC)
         +
-        timeout_replica_preCommit(currentView) . FaultyReplicaNewView(id, currentView, lockedQC, prepareQC);
+        timeout_replica(currentView) . FaultyReplicaNewView(id, currentView, lockedQC, prepareQC);
 
     %%%%
     % Process for the commit phase of the non-faulty replicas
@@ -439,7 +430,7 @@ proc
             ReplicaCommit(id, currentView, lockedQC, prepareQC)
             )
         +
-        timeout_replica_commit(currentView) . ReplicaNewView(id, currentView, lockedQC, prepareQC);
+        timeout_replica(currentView) . ReplicaNewView(id, currentView, lockedQC, prepareQC);
 
     %%%%
     % Process for the commit phase of the faulty replicas
@@ -468,7 +459,7 @@ proc
             <>
             FaultyReplicaCommit(id, currentView, lockedQC, prepareQC)
         +
-        timeout_replica_commit(currentView) . FaultyReplicaNewView(id, currentView, lockedQC, prepareQC);
+        timeout_replica(currentView) . FaultyReplicaNewView(id, currentView, lockedQC, prepareQC);
 
     %%%%
     % Process for the decide phase of the non-faulty replicas
@@ -492,7 +483,7 @@ proc
             ReplicaNewView(id, currentView, lockedQC, prepareQC)
             )
         +
-        timeout_replica_decide(currentView) . ReplicaNewView(id, currentView, lockedQC, prepareQC);
+        timeout_replica(currentView) . ReplicaNewView(id, currentView, lockedQC, prepareQC);
 
     %%%%
     % Process for the decide phase of the faulty replicas
@@ -515,7 +506,7 @@ proc
             <>
             FaultyReplicaDecide(id, currentView, lockedQC, prepareQC)
         +
-        timeout_replica_decide(currentView) . FaultyReplicaNewView(id, currentView, lockedQC, prepareQC);
+        timeout_replica(currentView) . FaultyReplicaNewView(id, currentView, lockedQC, prepareQC);
     %%%%
     % Process for the initializing the leader 
     %
@@ -651,7 +642,7 @@ proc
                 FaultyLeaderPreCommit(id, currentView, [], NullQC, counterCommand + 1, isLeader)
                 +
                 % Faulty leader does not send broadcast
-                timeout_leader_prepare(currentView) . FaultyLeaderNewView(id, currentView, NullQC, counterCommand)
+                timeout_leader(currentView) . FaultyLeaderNewView(id, currentView, NullQC, counterCommand)
                 % Idea: send node linked to a qc that is not the highest qc TO BE carefeful - if the node is not good it
                 % should not satisffy the safety rule: i.e. make sure it has a lower view num or that it does not extend 
                 % from qc
@@ -776,7 +767,7 @@ proc
                 FaultyLeaderCommit(id, currentView, [], prepareQC, NullQC, counterCommand, isLeader)
                 +
                 % Faulty leader does not send broadcast
-                timeout_leader_preCommit(currentView) . FaultyLeaderNewView(id, currentView, NullQC, counterCommand)
+                timeout_leader(currentView) . FaultyLeaderNewView(id, currentView, NullQC, counterCommand)
                 +
                 %TO DO: Think about some incorrect messages
 
@@ -840,7 +831,7 @@ proc
         +
         % Replica times out and moves to new view
         (
-            timeout_replica_commit(currentView) . LeaderNewView(id, currentView, NullQC, counterCommand)
+            timeout_leader(currentView) . LeaderNewView(id, currentView, NullQC, counterCommand)
         );
         
     %%%%
@@ -914,7 +905,7 @@ proc
         +
         % Replica times out and moves to new view
         (
-            timeout_replica_decide(currentView) . LeaderNewView(id, currentView, NullQC, counterCommand)
+            timeout_leader(currentView) . LeaderNewView(id, currentView, NullQC, counterCommand)
         );
         
     %%%%
@@ -937,7 +928,7 @@ init
     %hide({shareLeaderStatus},
         allow({
                message_sent, message_received, broadcast_sent, broadcast_received, shareLeaderStatus, test, 
-               timeout_prepare},
+               timeout},
             comm({
                 send_message | receive_message_to_forward -> message_sent,
                 forward_message | receive_message -> message_received,
@@ -946,8 +937,8 @@ init
                 sendLeaderStatus | receiveLeaderStatus -> shareLeaderStatus,
                 % the number of timeout for replica has to be 2N-1 and for leader it has to be 1, inactive leader
                 % processes are also considered replicas
-                timeout_replica_prepare | timeout_replica_prepare | timeout_replica_prepare | timeout_replica_prepare | 
-                timeout_replica_prepare | timeout_leader_prepare -> timeout_prepare
+                timeout_replica | timeout_replica | timeout_replica | timeout_replica | 
+                timeout_replica | timeout_leader -> timeout
                 },
                     ReplicaNewView(1, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0, 
                     createNode(0, 0, NullNode), N))||
