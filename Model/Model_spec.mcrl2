@@ -199,9 +199,9 @@ act
     % Actions for sending a broadcast. The data associated with each action is: the message, the sender
     send_broadcast, receive_broadcast_to_forward, broadcast_sent: Message # Pos;
 
-    % Actions for leader status. The data associated with each action is: leader status(leader/not lader), id 
-    % (for ensuring that the message is received by the corresponding leader process part), view number of the status
-    sendLeaderStatus, receiveLeaderStatus, shareLeaderStatus: Bool # Pos # Nat;
+    % Actions for leader status. The data associated with each action is: id (for ensuring that the message is 
+    % received by the corresponding leader process part), view number of the status
+    sendLeaderStatus, receiveLeaderStatus, shareLeaderStatus: Pos # Nat;
 
     % Actions associated with the timeout. The data associated with each action is: view number
     timeout_replica, timeout_leader, timeout: Nat;
@@ -253,7 +253,7 @@ proc
     %%%%
     ReplicaNewView(id: Pos, currentView: Nat, lockedQC: QC, prepareQC: QC) = 
         % A replica informs the corresponding leader process about its status (leader or not for a view)
-        sendLeaderStatus(LEADER_SCHEME.(currentView + 1) == id, id, currentView + 1).
+        sendLeaderStatus(id, currentView + 1).
         % A newView message from view 0 is assumed when the protocol is initiated
         send_message(createMessage(newView, currentView, NullNode, prepareQC, NullSignature), id, 
                      LEADER_SCHEME.(currentView + 1)) .  
@@ -271,7 +271,7 @@ proc
     %%%%
     FaultyReplicaNewView(id: Pos, currentView: Nat, lockedQC: QC, prepareQC: QC) = 
         % A replica informs the corresponding leader process about its status (leader or not for a view)
-        sendLeaderStatus(LEADER_SCHEME.(currentView + 1) == id, id, currentView + 1).
+        sendLeaderStatus(id, currentView + 1).
         % A newView message from view 0 is assumed when the protocol is initiated
         send_message(createMessage(newView, currentView, NullNode, prepareQC, NullSignature), id,
         LEADER_SCHEME.(currentView + 1)) . FaultyReplicaPrepare(id, currentView + 1, lockedQC, prepareQC) 
@@ -301,18 +301,25 @@ proc
     %
     %%%%
     ReplicaPrepare(id: Pos, currentView: Pos, lockedQC: QC, prepareQC: QC) = 
-        sum receivedMessage: Message . sum r: Pos . 
-        receive_broadcast(receivedMessage, r, id) .
-            % Check validity of message
-            (matchingMessage(receivedMessage, prepare, currentView) && 
-            % Check validity of node 
-            extends(node(mJustify(receivedMessage)), node(receivedMessage)) && 
-            safeNode(node(receivedMessage), lockedQC, mJustify(receivedMessage))) ->
-                send_message(createMessage(prepare, currentView, node(receivedMessage), NullQC,
-                             createSignature(id)), id, LEADER_SCHEME.(currentView)) . 
-                ReplicaPreCommit(id, currentView, lockedQC, prepareQC)
-            <>
+        sum receivedMessage: Message . sum s: Pos . 
+        receive_broadcast(receivedMessage, s, id) .
+            ((s == LEADER_SCHEME . (currentView)) && matchingMessage(receivedMessage, prepare, currentView) && 
+            % Ensure the message is accompanied by a QC
+            (mJustify(receivedMessage) == NullQC)) ->
                 ReplicaPrepare(id, currentView, lockedQC, prepareQC)
+            <>
+            
+                % Check validity of message
+                ((s == LEADER_SCHEME . (currentView)) && matchingMessage(receivedMessage, prepare, currentView) && 
+                % Check validity of node
+                extends(node(mJustify(receivedMessage)), node(receivedMessage)) && 
+                safeNode(node(receivedMessage), lockedQC, mJustify(receivedMessage))) ->
+                    send_message(createMessage(prepare, currentView, node(receivedMessage), NullQC,
+                                createSignature(id)), id, LEADER_SCHEME.(currentView)) . 
+                    ReplicaPreCommit(id, currentView, lockedQC, prepareQC)
+                <>
+                    ReplicaPrepare(id, currentView, lockedQC, prepareQC)
+            )
         +
         timeout_replica(currentView) . ReplicaNewView(id, currentView, lockedQC, prepareQC);
 
@@ -516,9 +523,8 @@ proc
     %
     %%%%
     LeaderNewView(id : Pos, currentView: Nat, counterCommand: Nat) =
-        sum receivedLeaderStatus: Bool, receivedView: Nat .
-        receiveLeaderStatus(receivedLeaderStatus, id, receivedView) .
-        (receivedLeaderStatus) ->
+        sum receivedView: Nat . receiveLeaderStatus(id, receivedView) .
+        (LEADER_SCHEME . (receivedView) == id) ->
             LeaderPrepare(id, receivedView, [], NullQC, counterCommand)
         <>
             LeaderIdle(id, receivedView, counterCommand);
@@ -534,9 +540,8 @@ proc
     %
     %%%%
     FaultyLeaderNewView(id : Pos, currentView: Nat, counterCommand: Nat) =
-        sum receivedLeaderStatus: Bool, receivedView: Nat .
-        receiveLeaderStatus(receivedLeaderStatus, id, receivedView) .
-        (receivedLeaderStatus) ->
+        sum receivedView: Nat . receiveLeaderStatus(id, receivedView) .
+        (LEADER_SCHEME . (receivedView) == id) ->
             FaultyLeaderPrepare(id, receivedView, [], NullQC, counterCommand) 
         <>
             FaultyLeaderIdle(id, receivedView, counterCommand);
@@ -791,7 +796,7 @@ proc
                 +
                 % Faulty leader does not send broadcast
                 timeout_leader(currentView) . FaultyLeaderNewView(id, currentView, counterCommand)
-                %TO DO: Think about some incorrect messages
+                %TO DO: Think about some incorrect messages - it cannot forge a qc
 
             )
 
