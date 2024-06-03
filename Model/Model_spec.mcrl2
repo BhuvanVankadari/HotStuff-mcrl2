@@ -150,14 +150,14 @@ eqn
     %
     % @param nodeToCheck         the node whose safety is being checked
     % @param qcLocked            the locked quorum certificate
-    % @param qcHigh              the quorum certificate with the highest view number
+    % @param qcToCheck              the quorum certificate to check
     %
     % @return boolean value representing whether the node is safe (as defined in function spec) or not
     %%%
-    (nodeToCheck == NullNode || qcLocked == NullQC || qcHigh == NullQC) ->
-        safeNode(nodeToCheck, qcLocked, qcHigh) = false;
-    safeNode(nodeToCheck, qcLocked, qcHigh) =
-        extends(nodeToCheck, node(qcLocked)) || (viewNumber(qcHigh) > viewNumber(qcLocked));
+    (nodeToCheck == NullNode || qcLocked == NullQC || qcToCheck == NullQC) ->
+        safeNode(nodeToCheck, qcLocked, qcToCheck) = false;
+    safeNode(nodeToCheck, qcLocked, qcToCheck) =
+        extends(node(qcLocked), nodeToCheck) || (viewNumber(qcToCheck) > viewNumber(qcLocked));
     
     %%%
     % Function to check if the message matches the required type and view number.
@@ -183,8 +183,7 @@ eqn
     %%%
     (QCToCheck == NullQC) -> matchingQC(QCToCheck, expectedMsgType, expectedViewNum) = false;
     matchingQC(QCToCheck, expectedMsgType, expectedViewNum) =
-        (expectedMsgType == type(QCToCheck)) &&
-        (expectedViewNum == viewNumber(QCToCheck));
+        (expectedMsgType == type(QCToCheck)) && (expectedViewNum == viewNumber(QCToCheck));
 
 act
     % Actions for sending a message. The data associated with each action is: the message, the sender, the receiver
@@ -221,39 +220,39 @@ proc
     %                            is reset to 1.
     %%%%
     Channel(messageQueue: List(messageTuple), broadcastCount: Pos) =
-        sum receivedMessage: Message. sum s, r: Pos . (r <= N && s <= N) ->
-            (
-                receive_message_to_forward(receivedMessage, s, r) . 
-                forward_message(receivedMessage, s, r) .
-                Channel(messageQueue, broadcastCount)
-            )
+        sum receivedMessage: Message. sum s, r: Pos .
+        (
+            receive_message_to_forward(receivedMessage, s, r) . 
+            forward_message(receivedMessage, s, r) .
+            Channel(messageQueue, broadcastCount)
+        )
         +
         sum receivedMessage: Message. sum s: Pos .
-            (
-                receive_broadcast_to_forward(receivedMessage, s) .
-                Channel(messageQueue <| createMessageTuple(receivedMessage, s), broadcastCount)
-            )
+        (
+            receive_broadcast_to_forward(receivedMessage, s) .
+            Channel(messageQueue <| createMessageTuple(receivedMessage, s), broadcastCount)
+        )
         +
         (broadcastCount < N && #messageQueue > 0) ->
-            (
-                forward_broadcast(message(head(messageQueue)), sender(head(messageQueue)), broadcastCount) . 
-                Channel(messageQueue, broadcastCount + 1)
-            )
+        (
+            forward_broadcast(message(head(messageQueue)), sender(head(messageQueue)), broadcastCount) . 
+            Channel(messageQueue, broadcastCount + 1)
+        )
         +
         (broadcastCount == N && #messageQueue > 0) ->
-            (
-                forward_broadcast(message(head(messageQueue)), sender(head(messageQueue)), broadcastCount) . 
-                Channel(tail(messageQueue), 1)
-            );
+        (
+            forward_broadcast(message(head(messageQueue)), sender(head(messageQueue)), broadcastCount) . 
+            Channel(tail(messageQueue), 1)
+        );
 
     %%%%
     % Process for initializing the non-faulty replicas
     %
     % @param id                  the ID of the replica
     % @param currentView         the view of the protocol in which the replica is in
-    % @param lockedQC            most recent signed QC that the replica received 
+    % @param lockedQC            most recent committed QC that the replica received 
     %                            initially it contains the QC for view 0 and root node (0, 0, NullNode)
-    % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n-f replicas)
+    % @param prepareQC           most recent prepareQC (voted in the prepare phase by at least n - f replicas)
     % 
     %%%%
     ReplicaNewView(id: Pos, currentView: Nat, lockedQC: QC, prepareQC: QC) = 
