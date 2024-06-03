@@ -74,8 +74,8 @@ map
  
 % Constant assignments
 eqn
-    N = 3;
-    F = 0;
+    N = (3*F) + 1;
+    F = 1;
     NUM_VIEWS = 3;
     COMMAND_LIST = [1, 2, 3];
     MESSAGE_LIST = [newView, prepare, preCommit, commit, decide];
@@ -728,11 +728,11 @@ proc
         +
         % when the replicas time out, their corresponding leader parts also time out
         timeout_replica(currentView) . phase_change_leader_faulty(newView) . 
-        FaultyLeaderNewView(id, currentView, counterCommand)
-        +
+        FaultyLeaderNewView(id, currentView, counterCommand);
+        % +
         % Faulty leader tries to reach consensus on an incorrect node (that violates the safe node rule)
-        send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, COMMAND_LIST.counterCommand, 
-        NullNode), NullQC, NullSignature), id) . FaultyLeaderIdle(id, currentView, counterCommand);
+        % send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, COMMAND_LIST.counterCommand, 
+        % NullNode), NullQC, NullSignature), id) . FaultyLeaderIdle(id, currentView, counterCommand);
         
 
     %%%%
