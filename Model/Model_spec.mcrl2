@@ -80,7 +80,7 @@ eqn
     COMMAND_LIST = [1, 2, 3];
     MESSAGE_LIST = [newView, prepare, preCommit, commit, decide];
     % First element is unused.
-    LEADER_SCHEME = [1, 1, 2, 2];
+    LEADER_SCHEME = [1, 1, 1, 2];
 
 % Function declarations
 map
@@ -1195,9 +1195,9 @@ init
                 ReplicaNewView(3, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
                 createNode(0, 0, NullNode), N)) ||
                 % FaultyReplicaNewView(4, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0, createNode(0, 0, NullNode), N)) ||
-                LeaderNewView(1, 1, 0) ||
-                LeaderNewView(2, 1, 0) ||
-                LeaderNewView(3, 1, 0) ||
+                LeaderNewView(1, 1, 1) ||
+                LeaderNewView(2, 1, 1) ||
+                LeaderNewView(3, 1, 1) ||
                 % FaultyLeaderNewView(4, 1, 0) ||
                 Channel([], 1)
     ));
