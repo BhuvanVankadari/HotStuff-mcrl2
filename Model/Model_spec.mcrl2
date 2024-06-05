@@ -259,12 +259,17 @@ proc
     % 
     %%%%
     ReplicaNewView(id: Pos, currentView: Nat, lockedQC: QC, prepareQC: QC) = 
-        % A replica informs the corresponding leader process about its status (leader or not for a view)
-        sendLeaderStatus(id, currentView + 1).
-        % A newView message from view 0 is assumed when the protocol is initiated
-        send_message(createMessage(newView, currentView, NullNode, prepareQC, NullSignature), id, 
-                     LEADER_SCHEME.(currentView + 1)) .  phase_change_replica(prepare) .
-        ReplicaPrepare(id, currentView + 1, lockedQC, prepareQC);
+        ((currentView + 1) <= NUM_VIEWS) ->
+        (
+            % A replica informs the corresponding leader process about its status (leader or not for a view)
+            sendLeaderStatus(id, currentView + 1).
+            % A newView message from view 0 is assumed when the protocol is initiated
+            send_message(createMessage(newView, currentView, NullNode, prepareQC, NullSignature), id, 
+                        LEADER_SCHEME.(currentView + 1)) .  phase_change_replica(prepare) .
+            ReplicaPrepare(id, currentView + 1, lockedQC, prepareQC)
+        )
+        <>
+            delta;
 
     %%%%
     % Process for initializing the faulty replicas
@@ -277,29 +282,33 @@ proc
     % 
     %%%%
     FaultyReplicaNewView(id: Pos, currentView: Nat, lockedQC: QC, prepareQC: QC) = 
-        % A replica informs the corresponding leader process about its status (leader or not for a view)
-        sendLeaderStatus(id, currentView + 1).
-        % A newView message from view 0 is assumed when the protocol is initiated
-        send_message(createMessage(newView, currentView, NullNode, prepareQC, NullSignature), id,
-                     LEADER_SCHEME.(currentView + 1)) . phase_change_replica_faulty(prepare) . 
-        FaultyReplicaPrepare(id, currentView + 1, lockedQC, prepareQC) 
-        +
-        % In this control sequence, the replica can send any type of message, with any view. This block is commented out
-        % due to the state space explosion that accompanies it.
-        % sum randomIndexFromMessageType: Nat . sum randomViewNumber: Nat .
-        % (randomViewNumber <= NUM_VIEWS && randomIndexFromMessageType <= 4) ->
-        %     send_message(createMessage(MESSAGE_LIST . randomViewNumber, randomViewNumber, NullNode, prepareQC,
-        %                  NullSignature), id, LEADER_SCHEME.(currentView + 1)) . 
-        %     FaultyReplicaPrepare(id, currentView + 1, lockedQC, prepareQC) 
-        % +
-        % Customize the specific false message, craft it with custom parameters
-        send_message(createMessage(prepare, currentView, NullNode, prepareQC, NullSignature), id,
-                     LEADER_SCHEME.(currentView + 1)) . phase_change_replica_faulty(prepare) . 
-        FaultyReplicaPrepare(id, currentView + 1, lockedQC, prepareQC) 
-        +
-        % Faulty replica not sending the message
-        phase_change_replica_faulty(prepare). FaultyReplicaPrepare(id, currentView + 1, lockedQC, prepareQC);
-
+        ((currentView + 1) <= NUM_VIEWS) ->
+        (
+            % A replica informs the corresponding leader process about its status (leader or not for a view)
+            sendLeaderStatus(id, currentView + 1).
+            % A newView message from view 0 is assumed when the protocol is initiated
+            send_message(createMessage(newView, currentView, NullNode, prepareQC, NullSignature), id,
+                        LEADER_SCHEME.(currentView + 1)) . phase_change_replica_faulty(prepare) . 
+            FaultyReplicaPrepare(id, currentView + 1, lockedQC, prepareQC) 
+            +
+            % In this control sequence, the replica can send any type of message, with any view. This block 
+            % is commented out due to the state space explosion that accompanies it.
+            % sum randomIndexFromMessageType: Nat . sum randomViewNumber: Nat .
+            % (randomViewNumber <= NUM_VIEWS && randomIndexFromMessageType <= 4) ->
+            %     send_message(createMessage(MESSAGE_LIST . randomViewNumber, randomViewNumber, NullNode, prepareQC,
+            %                  NullSignature), id, LEADER_SCHEME.(currentView + 1)) . 
+            %     FaultyReplicaPrepare(id, currentView + 1, lockedQC, prepareQC) 
+            % +
+            % Customize the specific false message, craft it with custom parameters
+            send_message(createMessage(prepare, currentView, NullNode, prepareQC, NullSignature), id,
+                        LEADER_SCHEME.(currentView + 1)) . phase_change_replica_faulty(prepare) . 
+            FaultyReplicaPrepare(id, currentView + 1, lockedQC, prepareQC) 
+            +
+            % Faulty replica not sending the message
+            phase_change_replica_faulty(prepare). FaultyReplicaPrepare(id, currentView + 1, lockedQC, prepareQC) 
+        )
+        <>
+            delta;
     %%%%
     % Process for the prepare phase of the non-faulty replicas
     %
