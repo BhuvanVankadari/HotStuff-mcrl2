@@ -74,8 +74,8 @@ map
  
 % Constant assignments
 eqn
-    N = (3*F) + 1;
-    F = 1;
+    N = (3*F) + 1 + 2;
+    F = 0;
     NUM_VIEWS = 3;
     COMMAND_LIST = [1, 2, 3];
     MESSAGE_LIST = [newView, prepare, preCommit, commit, decide];
