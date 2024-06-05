@@ -74,13 +74,13 @@ map
  
 % Constant assignments
 eqn
-    N = (3*F) + 1 + 2;
-    F = 0;
+    N = (3*F) + 1;
+    F = 1;
     NUM_VIEWS = 3;
     COMMAND_LIST = [1, 2, 3];
     MESSAGE_LIST = [newView, prepare, preCommit, commit, decide];
     % First element is unused.
-    LEADER_SCHEME = [1, 1, 1, 2];
+    LEADER_SCHEME = [1, 1, 4, 2];
 
 % Function declarations
 map
@@ -1221,11 +1221,11 @@ init
                 createNode(0, 0, NullNode), N)) ||
                 ReplicaNewView(3, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
                 createNode(0, 0, NullNode), N)) ||
-                % FaultyReplicaNewView(4, 0, createQC(newView, 0, createNode(0, 0, NullNode), N),
-                % createQC(newView, 0, createNode(0, 0, NullNode), N)) ||
+                FaultyReplicaNewView(4, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
+                createNode(0, 0, NullNode), N)) ||
                 LeaderNewView(1, 1, 1) ||
                 LeaderNewView(2, 1, 1) ||
                 LeaderNewView(3, 1, 1) ||
-                % FaultyLeaderNewView(4, 1, 0) ||
+                FaultyLeaderNewView(4, 1, 1) ||
                 Channel([], 1)
     ));
