@@ -1224,20 +1224,20 @@ init
                 createNode(0, 0, NullNode), N)) ||
                 ReplicaNewView(4, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
                 createNode(0, 0, NullNode), N)) ||
-                ReplicaNewView(4, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
-                createNode(0, 0, NullNode), N)) ||
-                ReplicaNewView(5, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
-                createNode(0, 0, NullNode), N)) ||
-                ReplicaNewView(6, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
-                createNode(0, 0, NullNode), N)) ||
+                % ReplicaNewView(4, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
+                % createNode(0, 0, NullNode), N)) ||
+                % ReplicaNewView(5, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
+                % createNode(0, 0, NullNode), N)) ||
+                % ReplicaNewView(6, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
+                % createNode(0, 0, NullNode), N)) ||
                 %FaultyReplicaNewView(4, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
                 %createNode(0, 0, NullNode), N)) ||
                 LeaderNewView(1, 1, 1) ||
                 LeaderNewView(2, 1, 1) ||
                 LeaderNewView(3, 1, 1) ||
                 LeaderNewView(4, 1, 1) ||
-                LeaderNewView(5, 1, 1) ||
-                LeaderNewView(6, 1, 1) ||
+                % LeaderNewView(5, 1, 1) ||
+                % LeaderNewView(6, 1, 1) ||
                 %FaultyLeaderNewView(4, 1, 1) ||
                 Channel([], 1)
     ));
