@@ -74,14 +74,22 @@ map
  
 % Constant assignments
 eqn
+<<<<<<< Updated upstream
     % N = (3*F) + 1;
     N = 4;
     F = 0;
     NUM_VIEWS = 4;
     COMMAND_LIST = [1, 2, 3, 4];
+=======
+    N = (3*F) + 1 + 2;
+    F = 0;
+    NUM_VIEWS = 4;
+    % 
+    COMMAND_LIST = [1, 2, 3, 4, 5, 6];
+>>>>>>> Stashed changes
     MESSAGE_LIST = [newView, prepare, preCommit, commit, decide];
     % First element is unused.
-    LEADER_SCHEME = [1, 1, 1, 1, 1, 1, 1, 1, 1];
+    LEADER_SCHEME = [1, 1, 2, 3, 1, 1, 1, 1, 1];
 
 % Function declarations
 map
@@ -215,6 +223,9 @@ act
     % Actions associated with switching modes. The data associated with each action is: replica id
     send_switch_view, receive_switch_view, switch_view: Pos;
 
+    % Action associated with termination of processes.
+    termination, all_processes_ended;
+
 proc
     %%%%
     % Process to serve as a channel
@@ -270,7 +281,7 @@ proc
             ReplicaPrepare(id, currentView + 1, lockedQC, prepareQC)
         )
         <>
-            delta;
+            termination . delta;
 
     %%%%
     % Process for initializing the faulty replicas
@@ -309,7 +320,7 @@ proc
             phase_change_replica_faulty(prepare). FaultyReplicaPrepare(id, currentView + 1, lockedQC, prepareQC) 
         )
         <>
-            delta;
+            termination . delta;
     %%%%
     % Process for the prepare phase of the non-faulty replicas
     %
@@ -1201,7 +1212,7 @@ init
     allow({
            message_sent, message_received, broadcast_sent, broadcast_received, shareLeaderStatus, timeout, 
            timeout_faulty_message, status_timeout_replica, phase_change_leader, phase_change_leader_faulty,
-           phase_change_replica, phase_change_replica_faulty, execute_command, switch_view},
+           phase_change_replica, phase_change_replica_faulty, execute_command, switch_view, all_processes_ended},
         comm({
             send_message | receive_message_to_forward -> message_sent,
             forward_message | receive_message -> message_received,
@@ -1214,7 +1225,9 @@ init
             % The number of timeout faulty message for replica has to be N and for leader it has to be 1
             timeout_faulty_message_replica | timeout_faulty_message_replica | timeout_faulty_message_replica | 
             timeout_faulty_message_leader -> timeout_faulty_message,
-            send_switch_view | receive_switch_view -> switch_view
+            send_switch_view | receive_switch_view -> switch_view,
+            % the number of termination actions should be N
+            termination | termination | termination ->  all_processes_ended 
             },
                 ReplicaNewView(1, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0, 
                 createNode(0, 0, NullNode), N))||
@@ -1222,8 +1235,11 @@ init
                 createNode(0, 0, NullNode), N)) ||
                 ReplicaNewView(3, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
                 createNode(0, 0, NullNode), N)) ||
+<<<<<<< Updated upstream
                 ReplicaNewView(4, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
                 createNode(0, 0, NullNode), N)) ||
+=======
+>>>>>>> Stashed changes
                 % ReplicaNewView(4, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
                 % createNode(0, 0, NullNode), N)) ||
                 % ReplicaNewView(5, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
@@ -1235,7 +1251,11 @@ init
                 LeaderNewView(1, 1, 1) ||
                 LeaderNewView(2, 1, 1) ||
                 LeaderNewView(3, 1, 1) ||
+<<<<<<< Updated upstream
                 LeaderNewView(4, 1, 1) ||
+=======
+                % LeaderNewView(4, 1, 1) ||
+>>>>>>> Stashed changes
                 % LeaderNewView(5, 1, 1) ||
                 % LeaderNewView(6, 1, 1) ||
                 %FaultyLeaderNewView(4, 1, 1) ||
