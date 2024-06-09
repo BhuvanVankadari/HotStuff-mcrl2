@@ -74,7 +74,7 @@ map
  
 % Constant assignments
 eqn
-    % N = (3*F) + 1;
+    % N >= (3*F) + 1;
     N = 4;
     F = 1;
     NUM_VIEWS = 4;
@@ -1272,10 +1272,10 @@ init
             sendLeaderStatus | receiveLeaderStatus -> shareLeaderStatus,
             send_status_timeout_replica | receive_status_timeout_replica -> status_timeout_replica,
             % The number of timeout for replica has to be N and for leader it has to be 1
-            timeout_replica | timeout_replica | timeout_replica | timeout_leader -> timeout,
+            timeout_replica | timeout_replica | timeout_replica | timeout_replica | timeout_leader -> timeout,
             % The number of timeout faulty message for replica has to be N and for leader it has to be 1
             timeout_faulty_message_replica | timeout_faulty_message_replica | timeout_faulty_message_replica | 
-            timeout_faulty_message_leader -> timeout_faulty_message,
+            timeout_faulty_message_replica | timeout_faulty_message_leader -> timeout_faulty_message,
             send_switch_view | receive_switch_view -> switch_view,
             indicate_termination | indicate_termination | indicate_termination | indicate_termination -> terminate
             },
