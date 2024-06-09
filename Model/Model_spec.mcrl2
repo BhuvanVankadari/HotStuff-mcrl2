@@ -203,7 +203,7 @@ act
     timeout_replica, timeout_leader, timeout: Nat;
 
     % % Actions associated with the timeout with faulty messages. The data associated with each action is: view number
-    % timeout_faulty_message_replica, timeout_faulty_message_leader, timeout_faulty_message: Nat;
+    timeout_faulty_message_replica, timeout_faulty_message_leader, timeout_faulty_message: Nat;
 
     % Actions associated with the timeout. The data associated with each action is: id, view number
     send_status_timeout_replica, receive_status_timeout_replica, status_timeout_replica: Pos # Nat;
@@ -222,7 +222,8 @@ act
     % Actions associated with the termination of processes
     indicate_termination, terminate;
 
-    test;
+    % Actions associated with the checking messages in nextViewMsgQueue
+    check_msg_queue;
 
 proc
     %%%%
@@ -304,12 +305,12 @@ proc
                 +
                 % In this control sequence, the replica can send any type of message, with any view. This block 
                 % is commented out due to the state space explosion that accompanies it.
-                % sum randomIndexFromMessageType: Nat . sum randomViewNumber: Nat .
-                % (randomViewNumber <= NUM_VIEWS && randomIndexFromMessageType <= 4) ->
-                %     send_message(createMessage(MESSAGE_LIST . randomViewNumber, randomViewNumber, NullNode, prepareQC,
-                %                  NullSignature), id, LEADER_SCHEME.(currentView + 1)) . 
-                %     FaultyReplicaPrepare(id, currentView + 1, lockedQC, prepareQC) 
-                % +
+                sum randomIndexFromMessageType: Nat . sum randomViewNumber: Nat .
+                (randomViewNumber <= NUM_VIEWS && randomIndexFromMessageType <= 4) ->
+                    send_message(createMessage(MESSAGE_LIST . randomViewNumber, randomViewNumber, NullNode, prepareQC,
+                                 NullSignature), id, LEADER_SCHEME.(currentView + 1)) . 
+                    FaultyReplicaPrepare(id, currentView + 1, lockedQC, prepareQC) 
+                +
                 % Customize the specific false message, craft it with custom parameters
                 send_message(createMessage(prepare, currentView, NullNode, prepareQC, NullSignature), id,
                             LEADER_SCHEME.(currentView + 1)) . phase_change_replica_faulty(id, prepare) . 
@@ -698,7 +699,8 @@ proc
                         phase_change_replica_faulty(id, newView) .
                         FaultyReplicaNewView(id, currentView, lockedQC, prepareQC)
                     <>
-                        % If the replica is not the leader, it informs its corresponding leader part about the view change
+                        % If the replica is not the leader, it informs its corresponding leader part about
+                        % the view change
                         send_switch_view(id) . 
                         phase_change_replica_faulty(id, newView) .
                         FaultyReplicaNewView(id, currentView, lockedQC, prepareQC)
@@ -873,17 +875,17 @@ proc
     %%%%
     % Process for the leader in the prepare phase
     %
-    % @param id                   the ID of the replica that has a leader role in the current view
-    % @param currentView          the view of the protocol in which the replica is in
-    % @param receivedMsgFrom      list of replicas that sent a newView message to the leader
-    % @param highQC               the highest prepareQC received from replicas
-    % @param counterCommand       index that keeps track of the next command that needs to be executed 
-    %                             and of the next nodeID
-    % @param nextViewMessageQueue queue to store newView messages in order to check their validity
+    % @param id                  the ID of the replica that has a leader role in the current view
+    % @param currentView         the view of the protocol in which the replica is in
+    % @param receivedMsgFrom     list of replicas that sent a newView message to the leader
+    % @param highQC              the highest prepareQC received from replicas
+    % @param counterCommand      index that keeps track of the next command that needs to be executed 
+    %                            and of the next nodeID
+    % @param nextViewMsgQueue    queue to store newView messages in order to check their validity
     % 
     %%%%
     LeaderPrepare(id : Pos, currentView: Nat, receivedMsgFrom: List(Pos), highQC: QC, counterCommand: Nat,
-                  nextViewMessageQueue: List(messageTuple)) =
+                  nextViewMsgQueue: List(messageTuple)) =
         (sum receivedMessage: Message . sum s: Pos .
         (
             receive_message(receivedMessage, s, id) .
@@ -893,37 +895,38 @@ proc
                 (
                     % If a replica voted twice, the message is ignored
                     (s in receivedMsgFrom) ->
-                        LeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand, nextViewMessageQueue)
+                        LeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand, nextViewMsgQueue)
                     <>
                         % Correct message from a new replica, vote is counted
                         LeaderPrepare(id, currentView, receivedMsgFrom <| s, highestQC(highQC,
-                                        mJustify(receivedMessage)), counterCommand, nextViewMessageQueue)
+                                        mJustify(receivedMessage)), counterCommand, nextViewMsgQueue)
                 )
                 <>
                     % Incorrect messages are not counted
-                    LeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand, nextViewMessageQueue) 
+                    LeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand, nextViewMsgQueue) 
             )
         ))
         +
-        ((# nextViewMessageQueue > 0) -> 
+        ((# nextViewMsgQueue > 0) -> 
         (
             % It is a valid message
-            (sender(head(nextViewMessageQueue)) <= N && matchingMessage(message(head(nextViewMessageQueue)),
+            (sender(head(nextViewMsgQueue)) <= N && matchingMessage(message(head(nextViewMsgQueue)),
              newView, Int2Nat(currentView - 1))) ->
             (
                 % If a replica voted twice, the message is ignored
-                (sender(head(nextViewMessageQueue)) in receivedMsgFrom) ->
-                    test . LeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand, tail(nextViewMessageQueue))
+                (sender(head(nextViewMsgQueue)) in receivedMsgFrom) ->
+                    check_msg_queue .
+                    LeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand, tail(nextViewMsgQueue))
                 <>
                     % Correct message from a new replica, vote is counted
-                    test . LeaderPrepare(id, currentView, receivedMsgFrom <| sender(head(nextViewMessageQueue)),
-                                  highestQC(highQC, mJustify(message(head(nextViewMessageQueue)))), counterCommand,
-                                  tail(nextViewMessageQueue))
+                    check_msg_queue . LeaderPrepare(id, currentView, receivedMsgFrom <| sender(head(nextViewMsgQueue)),
+                                  highestQC(highQC, mJustify(message(head(nextViewMsgQueue)))), counterCommand,
+                                  tail(nextViewMsgQueue))
             )
             <>
                 % Incorrect messages are not counted
-                test . LeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand,
-                                     tail(nextViewMessageQueue))
+                check_msg_queue . LeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand,
+                                     tail(nextViewMsgQueue))
         ))
         +
         (
@@ -940,17 +943,17 @@ proc
     %%%%
     % Process for the faulty leader in the prepare phase
     %
-    % @param id                   the ID of the replica that has a leader role in the current view
-    % @param currentView          the view of the protocol in which the replica is in
-    % @param receivedMsgFrom      list of replicas that sent a newView message to the leader
-    % @param highQC               the highest prepareQC received from replicas
-    % @param counterCommand       index that keeps track of the next command that needs to be executed 
-    %                             and of the next nodeID
-    % @param nextViewMessageQueue queue to store newView messages in order to check their validity
+    % @param id                  the ID of the replica that has a leader role in the current view
+    % @param currentView         the view of the protocol in which the replica is in
+    % @param receivedMsgFrom     list of replicas that sent a newView message to the leader
+    % @param highQC              the highest prepareQC received from replicas
+    % @param counterCommand      index that keeps track of the next command that needs to be executed 
+    %                            and of the next nodeID
+    % @param nextViewMsgQueue    queue to store newView messages in order to check their validity
     % 
     %%%%
     FaultyLeaderPrepare(id : Pos, currentView: Nat, receivedMsgFrom: List(Pos), highQC: QC, counterCommand: Nat,
-                        nextViewMessageQueue: List(messageTuple)) =
+                        nextViewMsgQueue: List(messageTuple)) =
         sum receivedMessage: Message . sum s: Pos .
         (
             receive_message(receivedMessage, s, id) .
@@ -961,37 +964,38 @@ proc
                     % If a replica voted twice, the message is ignored
                     (s in receivedMsgFrom) ->
                         FaultyLeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand,
-                                            nextViewMessageQueue)
+                                            nextViewMsgQueue)
                     <>
                         % Correct message from correct replica, it is counted
                         FaultyLeaderPrepare(id, currentView, receivedMsgFrom <| s, highestQC(highQC,
-                                            mJustify(receivedMessage)), counterCommand, nextViewMessageQueue)
+                                            mJustify(receivedMessage)), counterCommand, nextViewMsgQueue)
                 )
                 <>
                     % Incorrect messages are ignored
-                    FaultyLeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand, nextViewMessageQueue) 
+                    FaultyLeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand, nextViewMsgQueue) 
             )
         )
         +
-        (# nextViewMessageQueue > 0) -> 
+        (# nextViewMsgQueue > 0) -> 
         (
             % It is a valid message
-            (sender(head(nextViewMessageQueue)) <= N && matchingMessage(message(head(nextViewMessageQueue)),
+            (sender(head(nextViewMsgQueue)) <= N && matchingMessage(message(head(nextViewMsgQueue)),
              newView, Int2Nat(currentView - 1))) ->
             (
                 % If a replica voted twice, the message is ignored
-                (sender(head(nextViewMessageQueue)) in receivedMsgFrom) ->
-                    test . FaultyLeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand,
-                                        tail(nextViewMessageQueue))
+                (sender(head(nextViewMsgQueue)) in receivedMsgFrom) ->
+                    check_msg_queue . FaultyLeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand,
+                                        tail(nextViewMsgQueue))
                 <>
                     % Correct message from a new replica, vote is counted
-                    test . FaultyLeaderPrepare(id, currentView, receivedMsgFrom <| sender(head(nextViewMessageQueue)),
-                                        highestQC(highQC, mJustify(message(head(nextViewMessageQueue)))),
-                                        counterCommand, tail(nextViewMessageQueue))
+                    check_msg_queue . FaultyLeaderPrepare(id, currentView, receivedMsgFrom <| 
+                                                          sender(head(nextViewMsgQueue)), 
+                                                          highestQC(highQC, mJustify(message(head(nextViewMsgQueue)))),
+                                                          counterCommand, tail(nextViewMsgQueue))
             )
             <>
                 % Incorrect messages are not counted
-                test . FaultyLeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand,
+                check_msg_queue . FaultyLeaderPrepare(id, currentView, receivedMsgFrom, highQC, counterCommand,
                                     tail(nextViewMessageQueue))
         )
         +
@@ -1319,7 +1323,7 @@ init
     allow({
            message_sent, message_received, broadcast_sent, broadcast_received, shareLeaderStatus, timeout,
            status_timeout_replica, phase_change_leader, phase_change_leader_faulty,
-           phase_change_replica, phase_change_replica_faulty, execute_command, switch_view, terminate, test},
+           phase_change_replica, phase_change_replica_faulty, execute_command, switch_view, terminate, check_msg_queue},
         comm({
             send_message | receive_message_to_forward -> message_sent,
             forward_message | receive_message -> message_received,
