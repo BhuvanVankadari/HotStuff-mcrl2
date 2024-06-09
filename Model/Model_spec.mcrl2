@@ -400,26 +400,26 @@ proc
                     phase_change_replica_faulty(id, preCommit) . 
                     FaultyReplicaPreCommit(id, currentView, lockedQC, prepareQC)
                 )
-                <>
-                (
-                    (s == LEADER_SCHEME . (currentView)) -> 
-                        timeout_faulty_message_replica(currentView) . 
-                        (
-                            % if the current replica is the leader, it's leader part timed out so it does not have to 
-                            % inform the leader part about the timeout
-                            (id == LEADER_SCHEME . (currentView)) -> 
-                                phase_change_replica_faulty(id, newView) . 
-                                FaultyReplicaNewView(id, currentView, lockedQC, prepareQC)
-                            <>
-                                send_status_timeout_replica(id, currentView) .
-                                phase_change_replica_faulty(id, newView) . 
-                                FaultyReplicaNewView(id, currentView, lockedQC, prepareQC)
-                        )
-                    <>
-                        % Incorrect messages from replicas that are not leaders are ignored and the replica waits 
-                        % for a message from the leader
-                        FaultyReplicaPrepare(id, currentView, lockedQC, prepareQC)
-                )
+                % <>
+                % (
+                %     (s == LEADER_SCHEME . (currentView)) -> 
+                %         timeout_faulty_message_replica(currentView) . 
+                %         (
+                %             % if the current replica is the leader, it's leader part timed out so it does not have to 
+                %             % inform the leader part about the timeout
+                %             (id == LEADER_SCHEME . (currentView)) -> 
+                %                 phase_change_replica_faulty(id, newView) . 
+                %                 FaultyReplicaNewView(id, currentView, lockedQC, prepareQC)
+                %             <>
+                %                 send_status_timeout_replica(id, currentView) .
+                %                 phase_change_replica_faulty(id, newView) . 
+                %                 FaultyReplicaNewView(id, currentView, lockedQC, prepareQC)
+                %         )
+                %     <>
+                %         % Incorrect messages from replicas that are not leaders are ignored and the replica waits 
+                %         % for a message from the leader
+                %         FaultyReplicaPrepare(id, currentView, lockedQC, prepareQC)
+                % )
             )
         )
         +
@@ -452,16 +452,16 @@ proc
                                             createSignature(id)), id, LEADER_SCHEME.(currentView)) .
                 phase_change_replica(id, commit) . ReplicaCommit(id, currentView, lockedQC, mJustify(receivedMessage))
             )
-            <>
-            (
-                (s == LEADER_SCHEME . (currentView)) ->
-                    timeout_faulty_message_replica(currentView) . send_status_timeout_replica(id, currentView) .
-                    phase_change_replica(id, newView) . ReplicaNewView(id, currentView, lockedQC, prepareQC)
-                <>
-                    % Incorrect messages from replicas that are not leaders are ignored and the replica waits 
-                    % for a message from the leader
-                    ReplicaPreCommit(id, currentView, lockedQC, prepareQC)
-            )
+            % <>
+            % (
+            %     (s == LEADER_SCHEME . (currentView)) ->
+            %         timeout_faulty_message_replica(currentView) . send_status_timeout_replica(id, currentView) .
+            %         phase_change_replica(id, newView) . ReplicaNewView(id, currentView, lockedQC, prepareQC)
+            %     <>
+            %         % Incorrect messages from replicas that are not leaders are ignored and the replica waits 
+            %         % for a message from the leader
+            %         ReplicaPreCommit(id, currentView, lockedQC, prepareQC)
+            % )
         )
         +
         % Replica waits for message for too long, it times out
@@ -504,28 +504,28 @@ proc
                 phase_change_replica_faulty(id, commit) .
                 FaultyReplicaCommit(id, currentView, lockedQC, mJustify(receivedMessage))
             )
-            <>
-            (
-                (s == LEADER_SCHEME . (currentView)) ->
-                (
-                    timeout_faulty_message_replica(currentView) .
-                    (
-                        % if the current replica is the leader, it's leader part timed out so it does not have to 
-                        % inform the leader part about the timeout
-                        (id == LEADER_SCHEME . (currentView)) ->
-                            phase_change_replica_faulty(id, newView) . 
-                            FaultyReplicaNewView(id, currentView, lockedQC, prepareQC)
-                        <>
-                            send_status_timeout_replica(id, currentView) .
-                            phase_change_replica_faulty(id, newView) .
-                            FaultyReplicaNewView(id, currentView, lockedQC, prepareQC)
-                    )
-                )
-                <>
-                    % Incorrect messages from replicas that are not leaders are ignored and the replica waits 
-                    % for a message from the leader
-                    FaultyReplicaPreCommit(id, currentView, lockedQC, prepareQC)
-            )
+            % <>
+            % (
+            %     (s == LEADER_SCHEME . (currentView)) ->
+            %     (
+            %         timeout_faulty_message_replica(currentView) .
+            %         (
+            %             % if the current replica is the leader, it's leader part timed out so it does not have to 
+            %             % inform the leader part about the timeout
+            %             (id == LEADER_SCHEME . (currentView)) ->
+            %                 phase_change_replica_faulty(id, newView) . 
+            %                 FaultyReplicaNewView(id, currentView, lockedQC, prepareQC)
+            %             <>
+            %                 send_status_timeout_replica(id, currentView) .
+            %                 phase_change_replica_faulty(id, newView) .
+            %                 FaultyReplicaNewView(id, currentView, lockedQC, prepareQC)
+            %         )
+            %     )
+            %     <>
+            %         % Incorrect messages from replicas that are not leaders are ignored and the replica waits 
+            %         % for a message from the leader
+            %         FaultyReplicaPreCommit(id, currentView, lockedQC, prepareQC)
+            % )
         )
         +
         timeout_replica(currentView) . 
@@ -557,16 +557,16 @@ proc
                                             createSignature(id)), id, LEADER_SCHEME.(currentView)) .
                 phase_change_replica(id, decide) . ReplicaDecide(id, currentView, mJustify(receivedMessage), prepareQC)
             )
-            <>
-            (
-                (s == LEADER_SCHEME . (currentView)) ->
-                    timeout_faulty_message_replica(currentView) . send_status_timeout_replica(id, currentView) .
-                    phase_change_replica(id, newView) . ReplicaNewView(id, currentView, lockedQC, prepareQC)
-                <>
-                    % Incorrect messages from replicas that are not leaders are ignored and the replica waits 
-                    % for a message from the leader
-                    ReplicaCommit(id, currentView, lockedQC, prepareQC)
-            )
+            % <>
+            % (
+            %     (s == LEADER_SCHEME . (currentView)) ->
+            %         timeout_faulty_message_replica(currentView) . send_status_timeout_replica(id, currentView) .
+            %         phase_change_replica(id, newView) . ReplicaNewView(id, currentView, lockedQC, prepareQC)
+            %     <>
+            %         % Incorrect messages from replicas that are not leaders are ignored and the replica waits 
+            %         % for a message from the leader
+            %         ReplicaCommit(id, currentView, lockedQC, prepareQC)
+            % )
         )
         +
         timeout_replica(currentView) . send_status_timeout_replica(id, currentView) . 
@@ -605,27 +605,27 @@ proc
                 phase_change_replica_faulty(id, decide) . 
                 FaultyReplicaDecide(id, currentView, mJustify(receivedMessage), prepareQC)
             )
-            <>
-            (
-                (s == LEADER_SCHEME . (currentView)) ->
-                (
-                    timeout_faulty_message_replica(currentView) .
-                    (
-                        % if the current replica is the leader, it's leader part timed out so it does not have to 
-                        % inform the leader part about the timeout
-                        (id == LEADER_SCHEME . (currentView)) ->
-                            phase_change_replica_faulty(id, newView) . 
-                            FaultyReplicaNewView(id, currentView, lockedQC, prepareQC)
-                        <>
-                            send_status_timeout_replica(id, currentView) . phase_change_replica_faulty(id, newView) . 
-                            FaultyReplicaNewView(id, currentView, lockedQC, prepareQC)
-                    )
-                )
-                <>
-                    % Incorrect messages from replicas that are not leaders are ignored and the replica waits 
-                    % for a message from the leader
-                    FaultyReplicaCommit(id, currentView, lockedQC, prepareQC)
-            )
+            % <>
+            % (
+            %     (s == LEADER_SCHEME . (currentView)) ->
+            %     (
+            %         timeout_faulty_message_replica(currentView) .
+            %         (
+            %             % if the current replica is the leader, it's leader part timed out so it does not have to 
+            %             % inform the leader part about the timeout
+            %             (id == LEADER_SCHEME . (currentView)) ->
+            %                 phase_change_replica_faulty(id, newView) . 
+            %                 FaultyReplicaNewView(id, currentView, lockedQC, prepareQC)
+            %             <>
+            %                 send_status_timeout_replica(id, currentView) . phase_change_replica_faulty(id, newView) . 
+            %                 FaultyReplicaNewView(id, currentView, lockedQC, prepareQC)
+            %         )
+            %     )
+            %     <>
+            %         % Incorrect messages from replicas that are not leaders are ignored and the replica waits 
+            %         % for a message from the leader
+            %         FaultyReplicaCommit(id, currentView, lockedQC, prepareQC)
+            % )
         )
         +
         timeout_replica(currentView) . 
@@ -661,16 +661,16 @@ proc
                     send_switch_view(id) . 
                     phase_change_replica(id, newView) . ReplicaNewView(id, currentView, lockedQC, prepareQC)
             )
-            <>
-            (
-                (s == LEADER_SCHEME . (currentView)) ->
-                    timeout_faulty_message_replica(currentView) . send_status_timeout_replica(id, currentView) .
-                    phase_change_replica(id, newView) . ReplicaNewView(id, currentView, lockedQC, prepareQC)
-                <>
-                    % Incorrect messages from replicas that are not leaders are ignored and the replica waits 
-                    % for a message from the leader
-                    ReplicaDecide(id, currentView, lockedQC, prepareQC)
-            )
+            % <>
+            % (
+            %     (s == LEADER_SCHEME . (currentView)) ->
+            %         timeout_faulty_message_replica(currentView) . send_status_timeout_replica(id, currentView) .
+            %         phase_change_replica(id, newView) . ReplicaNewView(id, currentView, lockedQC, prepareQC)
+            %     <>
+            %         % Incorrect messages from replicas that are not leaders are ignored and the replica waits 
+            %         % for a message from the leader
+            %         ReplicaDecide(id, currentView, lockedQC, prepareQC)
+            % )
         )
         +
         timeout_replica(currentView) . send_status_timeout_replica(id, currentView) . 
@@ -715,25 +715,25 @@ proc
                         FaultyReplicaNewView(id, currentView, lockedQC, prepareQC)
                 )
             )
-            <>
-            (
-                (s == LEADER_SCHEME . (currentView)) ->
-                    timeout_faulty_message_replica(currentView) . 
-                    (
-                        % if the current replica is the leader, it's leader part timed out so it does not have to 
-                        % inform the leader part about the timeout
-                        (id == LEADER_SCHEME . (currentView)) -> 
-                            phase_change_replica_faulty(id, newView) . 
-                            FaultyReplicaNewView(id, currentView, lockedQC, prepareQC)
-                        <>
-                            send_status_timeout_replica(id, currentView) . phase_change_replica_faulty(id, newView) . 
-                            FaultyReplicaNewView(id, currentView, lockedQC, prepareQC)
-                    )
-                <>
-                    % Incorrect messages from replicas that are not leaders are ignored and the replica waits 
-                    % for a message from the leader
-                    FaultyReplicaDecide(id, currentView, lockedQC, prepareQC)
-            )
+            % <>
+            % (
+            %     (s == LEADER_SCHEME . (currentView)) ->
+            %         timeout_faulty_message_replica(currentView) . 
+            %         (
+            %             % if the current replica is the leader, it's leader part timed out so it does not have to 
+            %             % inform the leader part about the timeout
+            %             (id == LEADER_SCHEME . (currentView)) -> 
+            %                 phase_change_replica_faulty(id, newView) . 
+            %                 FaultyReplicaNewView(id, currentView, lockedQC, prepareQC)
+            %             <>
+            %                 send_status_timeout_replica(id, currentView) . phase_change_replica_faulty(id, newView) . 
+            %                 FaultyReplicaNewView(id, currentView, lockedQC, prepareQC)
+            %         )
+            %     <>
+            %         % Incorrect messages from replicas that are not leaders are ignored and the replica waits 
+            %         % for a message from the leader
+            %         FaultyReplicaDecide(id, currentView, lockedQC, prepareQC)
+            % )
         )
         +
         timeout_replica(currentView) . 
@@ -1005,22 +1005,22 @@ proc
                 phase_change_leader_faulty(id, preCommit) . 
                 FaultyLeaderPreCommit(id, currentView, [], NullQC, counterCommand + 1)
                 +
-                % Faulty leader tries to reach consensus on an incorrect node (that violates the safe node rule),
-                send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, 
-                                COMMAND_LIST.counterCommand, NullNode), NullQC, NullSignature), id) . 
-                timeout_faulty_message_leader(currentView) . phase_change_leader_faulty(id, newView) . 
-                FaultyLeaderNewView(id, currentView, counterCommand, [])
-                +
-                % Faulty leader tries to reach consensus on node that does not extend lockedQC.node (violates extends 
-                % rule)
-                send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, 
-                                COMMAND_LIST.counterCommand, NullNode), highQC, NullSignature), id) . 
-                timeout_faulty_message_leader(currentView) . phase_change_leader_faulty(id, newView) . 
-                FaultyLeaderNewView(id, currentView, counterCommand, [])
-                +
                 % Faulty leader does not send broadcast
                 timeout_leader(currentView) . phase_change_leader_faulty(id, newView) . 
                 FaultyLeaderNewView(id, currentView, counterCommand, [])
+                % +
+                % % Faulty leader tries to reach consensus on an incorrect node (that violates the safe node rule),
+                % send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, 
+                %                 COMMAND_LIST.counterCommand, NullNode), NullQC, NullSignature), id) . 
+                % timeout_faulty_message_leader(currentView) . phase_change_leader_faulty(id, newView) . 
+                % FaultyLeaderNewView(id, currentView, counterCommand, [])
+                % +
+                % % Faulty leader tries to reach consensus on node that does not extend lockedQC.node (violates extends 
+                % % rule)
+                % send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, 
+                %                 COMMAND_LIST.counterCommand, NullNode), highQC, NullSignature), id) . 
+                % timeout_faulty_message_leader(currentView) . phase_change_leader_faulty(id, newView) . 
+                % FaultyLeaderNewView(id, currentView, counterCommand, [])
             )
         );
 
@@ -1115,12 +1115,12 @@ proc
                 % Faulty leader does not send broadcast
                 timeout_leader(currentView) . phase_change_leader_faulty(id, newView) . 
                 FaultyLeaderNewView(id, currentView, counterCommand, [])
-                +
-                % Faulty leader tries to skip precommit and go to commit phase
-                send_broadcast(createMessage(commit, currentView, NullNode, prepareQC, NullSignature), id) .
-                timeout_faulty_message_leader(currentView) .
-                phase_change_leader_faulty(id, newView) .
-                FaultyLeaderNewView(id, currentView, counterCommand, [])
+                % +
+                % % Faulty leader tries to skip precommit and go to commit phase
+                % send_broadcast(createMessage(commit, currentView, NullNode, prepareQC, NullSignature), id) .
+                % timeout_faulty_message_leader(currentView) .
+                % phase_change_leader_faulty(id, newView) .
+                % FaultyLeaderNewView(id, currentView, counterCommand, [])
             )
         );
     
@@ -1215,11 +1215,11 @@ proc
                 % Faulty leader does not send broadcast
                 timeout_leader(currentView) . phase_change_leader_faulty(id, newView) . 
                 FaultyLeaderNewView(id, currentView, counterCommand, [])
-                +
-                % Faulty leader tries to skip commit and go to decide phase
-                send_broadcast(createMessage(decide, currentView, NullNode, preCommitQC, NullSignature), id) .
-                timeout_faulty_message_leader(currentView) . phase_change_leader_faulty(id, newView) .
-                FaultyLeaderNewView(id, currentView, counterCommand, [])
+                % +
+                % % Faulty leader tries to skip commit and go to decide phase
+                % send_broadcast(createMessage(decide, currentView, NullNode, preCommitQC, NullSignature), id) .
+                % timeout_faulty_message_leader(currentView) . phase_change_leader_faulty(id, newView) .
+                % FaultyLeaderNewView(id, currentView, counterCommand, [])
             )
         );
         
@@ -1317,8 +1317,8 @@ proc
         
 init 
     allow({
-           message_sent, message_received, broadcast_sent, broadcast_received, shareLeaderStatus, timeout, 
-           timeout_faulty_message, status_timeout_replica, phase_change_leader, phase_change_leader_faulty,
+           message_sent, message_received, broadcast_sent, broadcast_received, shareLeaderStatus, timeout,
+           status_timeout_replica, phase_change_leader, phase_change_leader_faulty,
            phase_change_replica, phase_change_replica_faulty, execute_command, switch_view, terminate, test},
         comm({
             send_message | receive_message_to_forward -> message_sent,
@@ -1329,12 +1329,12 @@ init
             send_status_timeout_replica | receive_status_timeout_replica -> status_timeout_replica,
             % The number of timeout for replica has to be N and for leader it has to be 1
             timeout_replica | timeout_replica | timeout_replica | timeout_replica | timeout_leader -> timeout,
-            % The number of timeout faulty message for replica has to be N and for leader it has to be 1
-            timeout_faulty_message_replica | timeout_faulty_message_replica | timeout_faulty_message_replica | 
-            timeout_faulty_message_replica |  timeout_faulty_message_leader -> timeout_faulty_message,
             send_switch_view | receive_switch_view -> switch_view,
             % The number of indicate_termination actions should be N
             indicate_termination | indicate_termination | indicate_termination | indicate_termination -> terminate
+            % % The number of timeout faulty message for replica has to be N and for leader it has to be 1
+            % timeout_faulty_message_replica | timeout_faulty_message_replica | timeout_faulty_message_replica | 
+            % timeout_faulty_message_replica |  timeout_faulty_message_leader -> timeout_faulty_message,
             },
                 ReplicaNewView(1, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0, 
                 createNode(0, 0, NullNode), N))||
