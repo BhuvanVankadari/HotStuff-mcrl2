@@ -594,11 +594,6 @@ proc
                 phase_change_replica_faulty(id, decide) . 
                 FaultyReplicaDecide(id, currentView, mJustify(receivedMessage), prepareQC)
                 +
-                % Faulty replica votes for a wrong phase
-                send_message(createMessage(decide, currentView, NullNode, lockedQC, createSignature(id)), id, 
-                                LEADER_SCHEME.(currentView)) . phase_change_replica_faulty(id, decide) . 
-                FaultyReplicaDecide(id, currentView, mJustify(receivedMessage), prepareQC)
-                +
                 % Faulty replica does not vote and does not save the lockedQC
                 phase_change_replica_faulty(id, decide) . FaultyReplicaDecide(id, currentView, lockedQC, prepareQC)
                 +
