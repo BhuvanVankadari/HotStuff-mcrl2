@@ -822,10 +822,10 @@ proc
         sum receivedView: Nat . receiveLeaderStatus(id, receivedView) .
         (
             (LEADER_SCHEME . (receivedView) == id) ->
-                phase_change_leader(id, prepare) . LeaderPrepare(id, receivedView, [], NullQC, counterCommand,
+                phase_change_leader(id, prepare) . LeaderPrepare(id, receivedView, [], NullQC, receivedView,
                                                              nextViewMsgQueue)
             <>
-                LeaderIdle(id, receivedView, counterCommand, [])
+                LeaderIdle(id, receivedView, receivedView, [])
         )
         + 
         sum receivedMessage: Message . sum s: Pos . receive_message(receivedMessage, s, id) .
@@ -852,10 +852,10 @@ proc
         (
             (LEADER_SCHEME . (receivedView) == id) ->
                 phase_change_leader_faulty(id, prepare) .
-                FaultyLeaderPrepare(id, receivedView, [], NullQC, counterCommand,
+                FaultyLeaderPrepare(id, receivedView, [], NullQC, receivedView,
                                     nextViewMsgQueue) 
             <>
-                FaultyLeaderIdle(id, receivedView, counterCommand, [])
+                FaultyLeaderIdle(id, receivedView, receivedView, [])
         )
         + 
         sum receivedMessage: Message . sum s: Pos . receive_message(receivedMessage, s, id) .
@@ -931,7 +931,7 @@ proc
                 send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, 
                                 COMMAND_LIST.counterCommand, node(highQC)), highQC, NullSignature), id) .
                 phase_change_leader(id, preCommit) . 
-                LeaderPreCommit(id, currentView, [], NullQC, counterCommand + 1)
+                LeaderPreCommit(id, currentView, [], NullQC, counterCommand)
             )
         );
 
@@ -1002,7 +1002,7 @@ proc
                 send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, 
                                 COMMAND_LIST.counterCommand, node(highQC)), highQC, NullSignature), id) .
                 phase_change_leader_faulty(id, preCommit) . 
-                FaultyLeaderPreCommit(id, currentView, [], NullQC, counterCommand + 1)
+                FaultyLeaderPreCommit(id, currentView, [], NullQC, counterCommand)
                 +
                 % Faulty leader does not send broadcast
                 timeout_leader(currentView) . phase_change_leader_faulty(id, newView) . 
