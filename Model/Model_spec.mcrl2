@@ -1331,7 +1331,7 @@ init
             forward_broadcast | receive_broadcast -> broadcast_received,
             sendLeaderStatus | receiveLeaderStatus -> shareLeaderStatus,
             send_status_timeout_replica | receive_status_timeout_replica -> status_timeout_replica,
-            % The number of timeout for replica has to be N and for leader it has to be 1
+            % The number of timeout for replica has to be N and for leader has to be 1
             timeout_replica | timeout_replica | timeout_replica | timeout_replica | timeout_leader -> timeout,
             send_switch_view | receive_switch_view -> switch_view,
             % The number of indicate_termination actions should be N
