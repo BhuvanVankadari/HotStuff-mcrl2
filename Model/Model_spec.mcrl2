@@ -213,8 +213,8 @@ act
     phase_change_replica, phase_change_leader, phase_change_replica_faulty,
     phase_change_leader_faulty: Pos # MessageType # Nat;
 
-    % Actions associated with command execution. The data associated with each action is: command
-    execute_command: Nat;
+    % Actions associated with command execution. The data associated with each action is: command, view
+    execute_command: Nat # Nat;
 
     % Actions associated with switching modes. The data associated with each action is: replica id
     send_switch_view, receive_switch_view, switch_view: Pos;
@@ -662,7 +662,7 @@ proc
             % Check validity of message
             ((s == LEADER_SCHEME . (currentView)) && (matchingQC(mJustify(receivedMessage), commit, currentView))) ->
             (
-                execute_command(command(node(mJustify(receivedMessage)))) . 
+                execute_command(command(node(mJustify(receivedMessage))), currentView) . 
                 (id == LEADER_SCHEME . (currentView)) -> 
                     phase_change_replica(id, newView, currentView) .
                     ReplicaNewView(id, currentView, lockedQC, prepareQC)
@@ -704,7 +704,7 @@ proc
             % Check validity of message
             ((s == LEADER_SCHEME . (currentView)) && (matchingQC(mJustify(receivedMessage), commit, currentView))) ->
             (
-                execute_command(command(node(mJustify(receivedMessage)))) . 
+                execute_command(command(node(mJustify(receivedMessage))), currentView) . 
                 (
                     (id == LEADER_SCHEME . (currentView)) -> 
                         phase_change_replica_faulty(id, newView, currentView) .
