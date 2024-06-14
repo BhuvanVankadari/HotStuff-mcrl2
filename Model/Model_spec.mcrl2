@@ -76,7 +76,7 @@ map
 eqn
     % N >= (3*F) + 1;
     N = 4;
-    F = 0;
+    F = 1;
     NUM_VIEWS = 4;
     % First element is unused.
     COMMAND_LIST = [1, 1, 2, 3, 4, 6, 5];
