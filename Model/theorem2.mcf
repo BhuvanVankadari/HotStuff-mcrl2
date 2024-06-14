@@ -1,0 +1,7 @@
+<true*> exists replica1, leader1: Pos, msg1: Message . 
+val(type(msg1) == commit && replica1 != 4) &&
+<message_sent(msg1, replica1, leader1)>
+<true*> exists replica2, leader2: Pos, msg2: Message . 
+val(type(msg2) == commit && replica2 != 4  &&
+extends(node(msg1), node(msg2)) == false && extends(node(msg2), node(msg1)) == false) &&
+<message_sent(msg2, replica2, leader2)> false
