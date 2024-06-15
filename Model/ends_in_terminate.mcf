@@ -1,1 +1,1 @@
-mu X.[!terminate]X
+mu X.([!terminate]X && <true>true)
