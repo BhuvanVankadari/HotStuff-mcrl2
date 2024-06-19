@@ -26,8 +26,8 @@ sort
     % The leader always uses mJustify to carry the QC for different phases.
     % Replicas use mJustify in newView messages to carry the highest prepareQC.
     Message = struct createMessage(type: MessageType, viewNumber: Nat, node: Node, mJustify: QC,
-                                   partialSignature: Signature) ?isMessage
-                   | NullMessage ?isNullMessage;
+                                   partialSignature: Signature) 
+                   | NullMessage;
     
     % Data structure for the signature
     %
@@ -41,7 +41,7 @@ sort
     % Data structure for message queue
     %
     % When the Channel receives a broadcast, it stores the message with its sender to forward it to all replicas.
-    messageTuple = struct createMessageTuple(message: Message, sender: Pos);
+    MessageTuple = struct createMessageTuple(message: Message, sender: Pos);
 
 % Constant declarations
 map
@@ -230,7 +230,7 @@ proc
     % @param broadcastCount      the ID of the next replica to broadcast to. After a broadcast is finished, this counter
     %                            is reset to 1.
     %%%%
-    Channel(messageQueue: List(messageTuple), broadcastCount: Pos) =
+    Channel(messageQueue: List(MessageTuple), broadcastCount: Pos) =
         sum receivedMessage: Message. sum s, r: Pos .
         (
             receive_message_to_forward(receivedMessage, s, r) . 
@@ -667,7 +667,7 @@ proc
     % @param nextViewMsgQueue    queue to store all newView messages in order to pass them to LeaderNewView
     % 
     %%%%
-    LeaderIdle(id: Pos, currentView: Nat, counterCommand: Nat, nextViewMsgQueue: List(messageTuple)) = 
+    LeaderIdle(id: Pos, currentView: Nat, counterCommand: Nat, nextViewMsgQueue: List(MessageTuple)) = 
         % Inactive leader part, ignores all received messages
         sum receivedMessage: Message . sum s: Pos . receive_message(receivedMessage, s, id) .
         (
@@ -698,7 +698,7 @@ proc
     % @param nextViewMsgQueue    queue to store all newView messages in order to pass them to LeaderNewView
     % 
     %%%%
-    FaultyLeaderIdle(id: Pos, currentView: Nat, counterCommand: Nat, nextViewMsgQueue: List(messageTuple)) = 
+    FaultyLeaderIdle(id: Pos, currentView: Nat, counterCommand: Nat, nextViewMsgQueue: List(MessageTuple)) = 
         % Inactive leader part, ignores all received messages
         sum receivedMessage: Message . sum s: Pos . receive_message(receivedMessage, s, id) .
         (
@@ -727,7 +727,7 @@ proc
     % @param nextViewMsgQueue    queue to store all newView messages in order to pass them to LeaderPrepare
     % 
     %%%%
-    LeaderNewView(id : Pos, currentView: Nat, counterCommand: Nat, nextViewMsgQueue: List(messageTuple)) =
+    LeaderNewView(id : Pos, currentView: Nat, counterCommand: Nat, nextViewMsgQueue: List(MessageTuple)) =
         sum receivedView: Nat . receiveLeaderStatus(id, receivedView) .
         (
             (LEADER_SCHEME . (receivedView) == id) ->
@@ -756,7 +756,7 @@ proc
     % @param nextViewMsgQueue    queue to store all newView messages in order to pass them to LeaderPrepare
     % 
     %%%%
-    FaultyLeaderNewView(id : Pos, currentView: Nat, counterCommand: Nat, nextViewMsgQueue: List(messageTuple)) =
+    FaultyLeaderNewView(id : Pos, currentView: Nat, counterCommand: Nat, nextViewMsgQueue: List(MessageTuple)) =
         sum receivedView: Nat . receiveLeaderStatus(id, receivedView) .
         (
             (LEADER_SCHEME . (receivedView) == id) ->
@@ -789,7 +789,7 @@ proc
     % 
     %%%%
     LeaderPrepare(id : Pos, currentView: Nat, receivedMsgFrom: List(Pos), highQC: QC, counterCommand: Nat,
-                  nextViewMsgQueue: List(messageTuple)) =
+                  nextViewMsgQueue: List(MessageTuple)) =
         (sum receivedMessage: Message . sum s: Pos .
         (
             receive_message(receivedMessage, s, id) .
@@ -857,7 +857,7 @@ proc
     % 
     %%%%
     FaultyLeaderPrepare(id : Pos, currentView: Nat, receivedMsgFrom: List(Pos), highQC: QC, counterCommand: Nat,
-                        nextViewMsgQueue: List(messageTuple)) =
+                        nextViewMsgQueue: List(MessageTuple)) =
         sum receivedMessage: Message . sum s: Pos .
         (
             receive_message(receivedMessage, s, id) .
