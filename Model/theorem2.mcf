@@ -1,7 +1,11 @@
-<true*> exists replica1, leader1: Pos, msg1: Message . 
-val(type(msg1) == commit && replica1 != 4) &&
-<message_sent(msg1, replica1, leader1)>
-<true*> exists replica2, leader2: Pos, msg2: Message . 
-val(type(msg2) == commit && replica2 != 4  &&
-extends(node(msg1), node(msg2)) == false && extends(node(msg2), node(msg1)) == false) &&
-<message_sent(msg2, replica2, leader2)> false
+[true*] forall msg1, msg2: Message, replica1, replica2, leader1, leader2: Pos .
+(
+    <message_sent(msg1, replica1, leader1)>true &&
+    <message_sent(msg2, replica2, leader2)>true &&
+    val(replica1 != replica2) &&
+    val(type(msg1) == commit) &&
+    val(type(msg2) == commit)
+) =>
+(
+    val(extends(node(msg1), node(msg2)) || extends(node(msg2), node(msg1)))
+)
