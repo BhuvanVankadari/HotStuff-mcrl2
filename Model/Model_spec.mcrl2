@@ -1029,16 +1029,32 @@ proc
                 % Faulty leader tries to reach consensus on an incorrect node (that violates the safe node rule),
                 send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, 
                                 COMMAND_LIST.counterCommand, NullNode), NullQC, NullSignature), id) . 
-                timeout_faulty_message_leader(currentView) . phase_change_leader_faulty(id, newView, currentView) . 
-                FaultyLeaderNewView(id, currentView, counterCommand, [])
+                FaultyLeaderTimeout(id, currentView, counterCommand)
                 +
                 % Faulty leader tries to reach consensus on node that does not extend lockedQC.node (violates extends 
                 % rule)
                 send_broadcast(createMessage(prepare, currentView, createNode(counterCommand, 
                                 COMMAND_LIST.counterCommand, NullNode), highQC, NullSignature), id) . 
-                timeout_faulty_message_leader(currentView) . phase_change_leader_faulty(id, newView, currentView) . 
-                FaultyLeaderNewView(id, currentView, counterCommand, [])
+                FaultyLeaderTimeout(id, currentView, counterCommand)
             )
+        );
+
+    %%%%
+    % Process for the faulty leader when it sends a wrong message and times out
+    %
+    % @param id                  the ID of the replica that has a leader role in the current view
+    % @param currentView         the view of the protocol in which the replica is in
+    % @param counterCommand      index that keeps track of the next command that needs to be executed 
+    %                            and of the next nodeID
+    % 
+    %%%%
+    FaultyLeaderTimeout(id: Pos, currentView: Nat, counterCommand: Nat) =
+        (
+            sum receivedMessage: Message . sum s: Pos . receive_message(receivedMessage, s, id) .
+                FaultyLeaderTimeout(id, currentView, counterCommand)
+            +
+            timeout_faulty_message_leader(currentView) . phase_change_leader_faulty(id, newView, currentView) . 
+                FaultyLeaderNewView(id, currentView, counterCommand, [])
         );
 
     %%%%
@@ -1135,9 +1151,7 @@ proc
                 +
                 % Faulty leader tries to skip precommit and go to commit phase
                 send_broadcast(createMessage(commit, currentView, NullNode, prepareQC, NullSignature), id) .
-                timeout_faulty_message_leader(currentView) .
-                phase_change_leader_faulty(id, newView, currentView) .
-                FaultyLeaderNewView(id, currentView, counterCommand, [])
+                FaultyLeaderTimeout(id, currentView, counterCommand)
             )
         );
     
@@ -1235,8 +1249,7 @@ proc
                 +
                 % Faulty leader tries to skip commit and go to decide phase
                 send_broadcast(createMessage(decide, currentView, NullNode, preCommitQC, NullSignature), id) .
-                timeout_faulty_message_leader(currentView) . phase_change_leader_faulty(id, newView, currentView) .
-                FaultyLeaderNewView(id, currentView, counterCommand, [])
+                FaultyLeaderTimeout(id, currentView, counterCommand)
             )
         );
         
