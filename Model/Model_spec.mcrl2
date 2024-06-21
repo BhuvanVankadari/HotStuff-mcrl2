@@ -75,14 +75,14 @@ map
 % Constant assignments
 eqn
     % N >= (3*F) + 1;
-    N = 4;
-    F = 1;
+    N = 3;
+    F = 0;
     NUM_VIEWS = 4;
     % First element is unused.
     COMMAND_LIST = [1, 1, 2, 3, 4, 6, 5];
     MESSAGE_LIST = [newView, prepare, preCommit, commit, decide];
     % First element is unused.
-    LEADER_SCHEME = [1, 1, 4, 3, 1, 1, 1, 1, 1];
+    LEADER_SCHEME = [1, 1, 2, 3, 1, 1, 1, 1, 1];
 
 % Function declarations
 map
@@ -1216,7 +1216,7 @@ init
             timeout_replica | timeout_replica | timeout_replica | timeout_replica | timeout_leader -> timeout,
             send_switch_view | receive_switch_view -> switch_view,
             % The number of indicate_termination actions should be N
-            indicate_termination | indicate_termination | indicate_termination | indicate_termination -> terminate
+            indicate_termination | indicate_termination | indicate_termination -> terminate
             },
                 ReplicaNewView(1, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0, 
                 createNode(0, 0, NullNode), N))||
@@ -1226,12 +1226,12 @@ init
                 createNode(0, 0, NullNode), N)) ||
                 % ReplicaNewView(4, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
                 % createNode(0, 0, NullNode), N)) ||
-                FaultyReplicaNewView(4, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
-                createNode(0, 0, NullNode), N)) ||
+                % FaultyReplicaNewView(4, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
+                % createNode(0, 0, NullNode), N)) ||
                 LeaderNewView(1, 1, 1, []) ||
                 LeaderNewView(2, 1, 1, []) ||
                 LeaderNewView(3, 1, 1, []) ||
                 % LeaderNewView(4, 1, 1, []) ||
-                FaultyLeaderNewView(4, 1, 1, []) ||
+                % FaultyLeaderNewView(4, 1, 1, []) ||
                 Channel([], 1)
     ));

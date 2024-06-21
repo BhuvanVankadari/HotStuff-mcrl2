@@ -1,0 +1,6 @@
+<true*> exists leader1: Pos, msg1: Message .  <broadcast_sent(msg1, leader1)>
+<true*> exists leader2: Pos, msg2: Message. (val(type(mJustify(msg1)) == type(mJustify(msg2)) &&
+extends(node(mJustify(msg1)), node(mJustify(msg2))) == false &&
+extends(node(mJustify(msg2)), node(mJustify(msg1))) == false &&
+viewNumber(mJustify(msg1)) == viewNumber(mJustify(msg2))) && <broadcast_sent(msg2, leader2)> false)
+

@@ -1,0 +1,6 @@
+[true*] forall replica1, leader1: Pos, msg1: Message .
+val(type(msg1) == preCommit) =>  [message_sent(msg1, replica1, leader1)]
+[true*] forall replica3, leader3: Pos, msg3: Message . 
+(val(type(msg3) == commit && viewNumber(msg3) == viewNumber(msg1) &&
+node(msg3) == node(msg1)) =>
+[message_sent (msg3, replica3, leader3)] true)
