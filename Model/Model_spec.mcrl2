@@ -542,6 +542,12 @@ proc
                 phase_change_replica_faulty(id, decide, currentView) .
                 FaultyReplicaDecide(id, currentView, lockedQC, prepareQC)
                 +
+                % The faulty replica votes for a wrong phase
+                send_message(createMessage(preCommit, currentView, node(mJustify(receivedMessage)), NullQC,
+                                           createSignature(id)), id, LEADER_SCHEME.(currentView)) .
+                phase_change_replica_faulty(id, decide, currentView) .
+                FaultyReplicaDecide(id, currentView, lockedQC, mJustify(receivedMessage))
+                +
                 % Faulty replica does not vote
                 phase_change_replica_faulty(id, decide, currentView) . 
                 FaultyReplicaDecide(id, currentView, mJustify(receivedMessage), prepareQC)
