@@ -125,6 +125,7 @@ eqn
     % @return boolean value representing whether nodeToCheck extends expectedAncestor
     %%%
     (nodeToCheck == NullNode || expectedAncestor == NullNode) -> extends(expectedAncestor, nodeToCheck) = false;
+    (nodeID(expectedAncestor) == nodeID(nodeToCheck)) -> extends(expectedAncestor, nodeToCheck) = true;
     (parentNode(nodeToCheck) == NullNode) -> extends(expectedAncestor, nodeToCheck) = false;
     (nodeID(parentNode(nodeToCheck)) == nodeID(expectedAncestor)) -> extends(expectedAncestor, nodeToCheck) = true;
     ((parentNode(nodeToCheck) != NullNode) && (nodeID(parentNode(nodeToCheck)) != nodeID(expectedAncestor))) ->
