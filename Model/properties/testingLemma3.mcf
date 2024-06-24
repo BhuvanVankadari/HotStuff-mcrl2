@@ -1,10 +1,3 @@
-[true*] forall replica1, leader1: Pos, msg1: Message .
-val(type(msg1) == preCommit) =>  [message_sent(msg1, replica1, leader1)]
-[true*] forall replica3, leader3: Pos, msg3: Message . 
-(val(type(msg3) == commit && viewNumber(msg3) == viewNumber(msg1) &&
-node(msg3) == node(msg1)) =>
-[message_sent (msg3, replica3, leader3)] true)
-
 [true*] forall replica1, leader1: Pos, msg1, msg2: Message .
 (
     % If a correct replica is locked such that lockedQC = precommitQC
@@ -24,10 +17,3 @@ node(msg3) == node(msg1)) =>
         val(viewNumber(msg3) == viewNumber(msg2))
     )
 )
-
-
-[true*] forall replica1, leader1: Pos, msg1: Message .
-val(type(msg1) == preCommit) =>  [message_sent(msg1, replica1, leader1)]
-[true*] forall replica2, leader2: Pos, msg2: Message . 
-(val(type(msg2) == commit && viewNumber(msg2) == viewNumber(msg1)) &&
-[message_sent (msg2, replica2, leader2)] true) => val(node(msg3) == node(msg1))
