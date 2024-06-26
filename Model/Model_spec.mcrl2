@@ -125,6 +125,7 @@ eqn
     % @return boolean value representing whether nodeToCheck extends expectedAncestor
     %%%
     (nodeToCheck == NullNode || expectedAncestor == NullNode) -> extends(expectedAncestor, nodeToCheck) = false;
+    (nodeID(expectedAncestor) == nodeID(nodeToCheck)) -> extends(expectedAncestor, nodeToCheck) = true;
     (parentNode(nodeToCheck) == NullNode) -> extends(expectedAncestor, nodeToCheck) = false;
     (nodeID(parentNode(nodeToCheck)) == nodeID(expectedAncestor)) -> extends(expectedAncestor, nodeToCheck) = true;
     ((parentNode(nodeToCheck) != NullNode) && (nodeID(parentNode(nodeToCheck)) != nodeID(expectedAncestor))) ->
@@ -306,12 +307,12 @@ proc
                 +
                 % In this control sequence, the replica can send any type of message, with any view. This block 
                 % is commented out due to the state space explosion that accompanies it.
-                sum randomIndexFromMessageType: Nat . sum randomViewNumber: Nat .
-                (randomViewNumber <= NUM_VIEWS && randomIndexFromMessageType <= 4) ->
-                    send_message(createMessage(MESSAGE_LIST . randomViewNumber, randomViewNumber, NullNode, prepareQC,
-                                 NullSignature), id, LEADER_SCHEME.(currentView + 1)) . 
-                    FaultyReplicaPrepare(id, currentView + 1, lockedQC, prepareQC) 
-                +
+                % sum randomIndexFromMessageType: Nat . sum randomViewNumber: Nat .
+                % (randomViewNumber <= NUM_VIEWS && randomIndexFromMessageType <= 4) ->
+                %     send_message(createMessage(MESSAGE_LIST . randomViewNumber, randomViewNumber, NullNode, prepareQC,
+                %                  NullSignature), id, LEADER_SCHEME.(currentView + 1)) . 
+                %     FaultyReplicaPrepare(id, currentView + 1, lockedQC, prepareQC) 
+                % +
                 % Customize the specific false message, craft it with custom parameters
                 send_message(createMessage(prepare, currentView, NullNode, prepareQC, NullSignature), id,
                             LEADER_SCHEME.(currentView + 1)) .
@@ -340,30 +341,39 @@ proc
         (
             % Ensure the message is accompanied by a QC, if it is not ignore it
             (mJustify(receivedMessage) == NullQC) ->
-                ReplicaPrepare(id, currentView, lockedQC, prepareQC)
+            (
+                (s == LEADER_SCHEME . (currentView)) -> 
+                    timeout_faulty_message_replica(currentView) . send_status_timeout_replica(id, currentView) .
+                    phase_change_replica(id, newView, currentView) . 
+                    ReplicaNewView(id, currentView, lockedQC, prepareQC)
+                <>
+                    % Incorrect messages from replicas that are not leaders are ignored and the replica waits 
+                    % for a message from the leader
+                    ReplicaPrepare(id, currentView, lockedQC, prepareQC)
+            )
             <>
+            (
+                % Check validity of message: it should be from current leader and be correct
+                ((s == LEADER_SCHEME . (currentView)) && matchingMessage(receivedMessage, prepare, currentView) && 
+                % Check validity of node
+                extends(node(mJustify(receivedMessage)), node(receivedMessage)) && 
+                safeNode(node(receivedMessage), lockedQC, mJustify(receivedMessage))) ->
+                    send_message(createMessage(prepare, currentView, node(receivedMessage), NullQC,
+                                                createSignature(id)), id, LEADER_SCHEME.(currentView)) . 
+                    phase_change_replica(id, preCommit, currentView).
+                    ReplicaPreCommit(id, currentView, lockedQC, prepareQC)
+                <>
                 (
-                    % Check validity of message: it should be from current leader and be correct
-                    ((s == LEADER_SCHEME . (currentView)) && matchingMessage(receivedMessage, prepare, currentView) && 
-                    % Check validity of node
-                    extends(node(mJustify(receivedMessage)), node(receivedMessage)) && 
-                    safeNode(node(receivedMessage), lockedQC, mJustify(receivedMessage))) ->
-                        send_message(createMessage(prepare, currentView, node(receivedMessage), NullQC,
-                                                   createSignature(id)), id, LEADER_SCHEME.(currentView)) . 
-                        phase_change_replica(id, preCommit, currentView).
-                        ReplicaPreCommit(id, currentView, lockedQC, prepareQC)
+                    (s == LEADER_SCHEME . (currentView)) -> 
+                        timeout_faulty_message_replica(currentView) . send_status_timeout_replica(id, currentView) .
+                        phase_change_replica(id, newView, currentView) . 
+                        ReplicaNewView(id, currentView, lockedQC, prepareQC)
                     <>
-                    (
-                        (s == LEADER_SCHEME . (currentView)) -> 
-                            timeout_faulty_message_replica(currentView) . send_status_timeout_replica(id, currentView) .
-                            phase_change_replica(id, newView, currentView) . 
-                            ReplicaNewView(id, currentView, lockedQC, prepareQC)
-                        <>
-                            % Incorrect messages from replicas that are not leaders are ignored and the replica waits 
-                            % for a message from the leader
-                            ReplicaPrepare(id, currentView, lockedQC, prepareQC)
-                    )
+                        % Incorrect messages from replicas that are not leaders are ignored and the replica waits 
+                        % for a message from the leader
+                        ReplicaPrepare(id, currentView, lockedQC, prepareQC)
                 )
+            )
         )
         +
         % Replica waited for a message for too long, it times out
@@ -385,7 +395,17 @@ proc
         (
             % Ensure the message is accompanied by a QC, if it is not ignore it
             (mJustify(receivedMessage) == NullQC) ->
-                FaultyReplicaPrepare(id, currentView, lockedQC, prepareQC)
+            (
+                (s == LEADER_SCHEME . (currentView)) -> 
+                    timeout_faulty_message_replica(currentView) . 
+                    send_status_timeout_replica(id, currentView) .
+                    phase_change_replica(id, newView, currentView) . 
+                    ReplicaNewView(id, currentView, lockedQC, prepareQC)
+                <>
+                    % Incorrect messages from replicas that are not leaders are ignored and the replica 
+                    %  waits for a message from the leader
+                    ReplicaPrepare(id, currentView, lockedQC, prepareQC)
+            )
             <>
             (
                 % Check validity of message: message should be from the current leader and it should be correct
