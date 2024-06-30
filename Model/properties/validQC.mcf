@@ -1,0 +1,9 @@
+
+[true*] forall msg1: Message, replica1, leader1: Pos .
+[message_sent(msg1, replica1, leader1)]
+[true*] forall msg3: Message, leader3: Pos . 
+val(type(msg1) != newView && type(msg1) == type(mJustify(msg3))) =>
+[broadcast_sent(msg3, leader3)] false
+
+
+

@@ -1,19 +1,9 @@
-[true*] forall replica1, leader1: Pos, msg1, msg2: Message .
-(
-    % If a correct replica is locked such that lockedQC = precommitQC
-    <broadcast_sent(msg1, leader1)>true &&
-    val(type(msg1) == commit) &&
-    <message_sent(msg2, replica1, leader1)>true &&
-    val(type(msg2) == commit) &&
-    val(viewNumber(msg2) == viewNumber(msg1)) &&
-    val(nodeID(node(mJustify(msg1))) == nodeID(node(msg2)))
-) =>
-(
-    [true*] forall replica2: Pos, msg3: Message .
-    (
-        <message_sent(msg3, replica2, leader1)>true &&
-        val(type(msg3) == preCommit) &&
-        val(nodeID(node(msg3)) == nodeID(node(msg2))) &&
-        val(viewNumber(msg3) == viewNumber(msg2))
-    )
-)
+[true*] forall msg1: Message, leader1: Pos . 
+[broadcast_sent(msg1, leader1)] 
+[true*] forall msg2: Message, replica1 : Pos .
+[message_sent(msg2, replica1, leader1)]
+[true*] forall msg3: Message, leader3: Pos . 
+val((type(msg1) == commit) && (type(msg2) == commit) && 
+    (nodeID(node(mJustify(msg1))) == nodeID(node(msg2))) && (viewNumber(msg2) == viewNumber(msg1)) &&
+    viewNumber(msg1) == viewNumber(msg3) && type(msg3) == prepare ) =>
+    [broadcast_sent(msg3, leader3)]false

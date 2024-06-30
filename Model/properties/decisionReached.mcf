@@ -1,1 +1,1 @@
-[true*] exists receivedCommand, view: Nat . [execute_command(receivedCommand, view)] true 
+exists receivedCommand, view: Nat . <true* . execute_command(receivedCommand, view)> true

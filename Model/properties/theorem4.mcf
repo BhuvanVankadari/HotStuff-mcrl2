@@ -1,10 +1,4 @@
-[true*] forall leader: Pos, phase: MessageType, view: Nat .
-(
-    <phase_change_leader(leader, phase, view)>true &&
-    val(phase == prepare) &&
-    <timeout(view)>false
-) =>
-(
-    <execute_command(COMMAND_LIST.view, view) . true* . execute_command(COMMAND_LIST.view, view) . true* . 
-    execute_command(COMMAND_LIST.view, view)>true
-)
+% if a timeout occurs a decision cannot be reached  in that state
+([true*] forall viewNum1: Nat . [timeout(viewNum1)]
+[true*] forall viewNum2: Nat . val(viewNum1 == viewNum2) =>
+[execute_command(COMMAND_LIST.viewNum1, viewNum1)]false)
