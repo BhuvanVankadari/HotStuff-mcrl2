@@ -75,7 +75,7 @@ map
 % Constant assignments
 eqn
     % N >= (3*F) + 1;
-    N = 4;
+    N = 3;
     F = 0;
     NUM_VIEWS = 3;
     % First element is unused.
@@ -1222,9 +1222,11 @@ init
             send_switch_view | receive_switch_view -> switch_view,
             % Editables
             % The number of timeout actions for replicas has to be N and for the leader has to be 1
-            timeout_replica | timeout_replica | timeout_replica | timeout_replica | timeout_leader -> timeout,
+            timeout_replica | timeout_replica | timeout_replica | timeout_replica |
+            timeout_replica | timeout_replica | timeout_replica | timeout_leader -> timeout,
             % The number of indicate_termination actions should be N
-            indicate_termination | indicate_termination | indicate_termination | indicate_termination -> terminate
+            indicate_termination | indicate_termination | indicate_termination -> terminate
+            % indicate_termination | indicate_termination | indicate_termination -> terminate
             },
                 ReplicaNewView(1, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0, 
                 createNode(0, 0, NullNode), N))||
@@ -1232,23 +1234,23 @@ init
                 createNode(0, 0, NullNode), N)) ||
                 ReplicaNewView(3, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
                 createNode(0, 0, NullNode), N)) ||
-                ReplicaNewView(4, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
-                createNode(0, 0, NullNode), N)) ||
+                % ReplicaNewView(4, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
+                % createNode(0, 0, NullNode), N)) ||
                 % ReplicaNewView(5, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0, 
                 % createNode(0, 0, NullNode), N))||
                 % ReplicaNewView(6, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
                 % createNode(0, 0, NullNode), N)) ||
                 % ReplicaNewView(7, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
                 % createNode(0, 0, NullNode), N)) ||
-                % FaultyReplicaNewView(4, 0, createQC(newView, 0, createNode(0, 0, NullNode), N), createQC(newView, 0,
-                % createNode(0, 0, NullNode), N)) ||
+                %
+                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Leader Processes %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                %
                 LeaderNewView(1, 1, 1, []) ||
                 LeaderNewView(2, 1, 1, []) ||
                 LeaderNewView(3, 1, 1, []) ||
-                LeaderNewView(4, 1, 1, []) ||
+                % LeaderNewView(4, 1, 1, []) ||
                 % LeaderNewView(5, 1, 1, []) ||
                 % LeaderNewView(6, 1, 1, []) ||
                 % LeaderNewView(7, 1, 1, []) ||
-                % FaultyLeaderNewView(4, 1, 1, []) ||
                 Channel([], 1)
     ));

@@ -6,4 +6,4 @@
     val((replica1 != replica2) && (type(msg1) == commit) && (type(msg2) == commit) &&
 
    (extends(node(msg1), node(msg2)) == false) && (extends(node(msg2), node(msg1)) == false)) =>
-   [message_sent(msg2, replica2, leader2)] false
+   [message_sent(msg2, replica2, leader2)] mu Z. Z
