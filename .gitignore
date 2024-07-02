@@ -1,3 +1,5 @@
 *.lps
 *.lts
 *.DS_Store
+cucuc/cucuc_spec.mcrl2
+Note replica 1,2,3 are correct repl.txt

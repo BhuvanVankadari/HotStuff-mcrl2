@@ -1,0 +1,10 @@
+[true*] forall msg1: Message, leader1: Pos .
+    [broadcast_sent(msg1, leader1)] 
+
+    [true*] forall msg2: Message, leader2: Pos . 
+
+    val((viewNumber(mJustify(msg1)) == viewNumber(mJustify(msg2))) &&
+        (type(mJustify(msg1)) == type(mJustify(msg2))) &&
+        (extends(node(mJustify(msg1)), node(mJustify(msg2))) == false) &&
+        (extends(node(mJustify(msg2)), node(mJustify(msg1))) == false)) =>
+   [broadcast_sent(msg2, leader2)] false

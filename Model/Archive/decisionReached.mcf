@@ -1,0 +1,1 @@
+exists receivedCommand, view: Nat . <true* . execute_command(receivedCommand, view)> true

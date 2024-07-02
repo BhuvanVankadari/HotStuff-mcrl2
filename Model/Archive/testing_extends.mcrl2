@@ -1,0 +1,201 @@
+sort
+    % Types of messages that can be generated within the protocol
+    MessageType = struct newView
+                       | prepare
+                       | preCommit
+                       | commit
+                       | decide;
+    
+    % Data structure for the quorum certificate
+    %
+    % A Quorum Certificate (QC) is a signed message and has a specific message type, corresponding view number, the node 
+    % and the signature on the replicas that signed it. The signature is the number of replicas that signed it.
+    QC = struct createQC(type: MessageType, viewNumber: Nat, node: Node, signature: Nat)
+                             | NullQC;
+
+    % Data structure for the tree of commands
+    %
+    % Each tree node contains a proposed command, a parent link and an ID for the node.
+    % parentNode contains the ID of the parent.
+    % parentNode = NullNode for the root.
+    Node = struct createNode(nodeID: Nat, command: Nat, parentNode: Node) | NullNode;
+
+    % Data structure for the message
+    %
+    % A message has a type, a view number, a node and an additional field, mJustify.
+    % The leader always uses mJustify to carry the QC for different phases.
+    % Replicas use mJustify in newView messages to carry the highest prepareQC.
+    Message = struct createMessage(type: MessageType, viewNumber: Nat, node: Node, mJustify: QC,
+                                   partialSignature: Signature) 
+                   | NullMessage;
+    
+    % Data structure for the signature
+    %
+    % The signature is used for signing the messages and uniquely identifying the replica.
+    % A faulty replica controlled by an adversary cannot replicate the signature of another replica. In this case, it 
+    % cannot use another replica's ID to sign the message (guaranteed by the protocol's description of the cryptographic
+    % primitives it relies on).
+    Signature = struct createSignature(replicaID: Pos)
+                     | NullSignature;
+    
+    % Data structure for message queue
+    %
+    % When the Channel receives a broadcast, it stores the message with its sender to forward it to all replicas.
+    MessageTuple = struct createMessageTuple(message: Message, sender: Pos);
+
+% Constant declarations
+map
+    % Number of replicas
+    N: Nat; 
+    
+    % Number of faulty replicas
+    F: Nat;
+
+    % Maximum number of views
+    %
+    % Restriction on the maximum number of views to avoid infinite state spaces.
+    NUM_VIEWS: Pos;
+    
+    % List of commands to be executed in order.
+    %
+    % Client sends a command from the predefined list of commands. The command list should contain at least 
+    % NUM_VIEWS + 1 commands.
+    COMMAND_LIST: List(Nat);
+
+    % List of valid message types
+    %
+    % List that a faulty replica uses to randomly sample from to decide on the message type.
+    MESSAGE_LIST: List(MessageType);
+
+    % Leader scheme to aid in the rotating leader scheme.
+    %
+    % List that all replicas use to determine the next leader.
+    LEADER_SCHEME: List(Pos);
+
+% Constant assignments
+eqn
+    % N >= (3*F) + 1;
+    N = 3;
+    F = 0;
+    NUM_VIEWS = 3;
+    % First element is unused.
+    COMMAND_LIST = [1, 1, 2, 3, 4, 6, 5];
+    MESSAGE_LIST = [newView, prepare, preCommit, commit, decide];
+    % First element is unused.
+    LEADER_SCHEME = [1, 1, 2, 3, 1, 1, 1, 1, 1];
+
+% Function declarations
+map
+    extends: Node # Node -> Bool;
+    highestQC: QC # QC -> QC;
+    safeNode: Node # QC # QC -> Bool;
+    matchingMessage: Message # MessageType # Nat -> Bool;
+    matchingQC: QC # MessageType # Nat -> Bool;
+
+% Parameters for the functions
+var
+    % Parameters associated with the extends() function
+    expectedAncestor: Node;
+    nodeToCheck: Node;
+
+    % Parameters associated with the highestQC() function
+    qc1: QC;
+    qc2: QC;
+
+    % Parameters associated with the safeNode() function
+    qcLocked: QC;
+    qcToCheck: QC;
+
+    % Parameters associated with the matchingMessage() function
+    messageToCheck: Message;
+    expectedMsgType: MessageType;
+    expectedViewNum: Nat;
+
+    % Parameters associated with the matchingQC() function
+    QCToCheck: QC;
+
+% Function definitions 
+eqn
+    %%%
+    % Function to check if a node extends the required node.
+    %
+    % @param expectedAncestor    the expected ancestor node
+    % @param nodeToCheck         the node whose ancestor is being checked
+    %
+    % @return boolean value representing whether nodeToCheck extends expectedAncestor
+    %%%
+    (expectedAncestor == nodeToCheck) -> extends(expectedAncestor, nodeToCheck) = true;
+    (nodeToCheck == NullNode || expectedAncestor == NullNode) -> extends(expectedAncestor, nodeToCheck) = false;
+    (parentNode(nodeToCheck) == NullNode) -> extends(expectedAncestor, nodeToCheck) = false;
+    (nodeID(parentNode(nodeToCheck)) == nodeID(expectedAncestor)) -> extends(expectedAncestor, nodeToCheck) = true;
+    ((parentNode(nodeToCheck) != NullNode) && (nodeID(parentNode(nodeToCheck)) != nodeID(expectedAncestor))) ->
+    extends(expectedAncestor, nodeToCheck) = extends(expectedAncestor, parentNode(nodeToCheck));
+
+    %%%
+    % Function to retrieve the quorum certificate associated with the highest view number between two quorum 
+    % certificates.
+    %
+    % @param qc1                 the first quorum certificate being compared
+    % @param qc2                 the second quorum certificate being compared
+    %
+    % @return the quorum certificate associated with the highest view number
+    %%%
+    % When one QC is null, the other (non-null) QC is selected. When both are null, the highest QC is null (NullQC).
+    highestQC(NullQC, qc2) = qc2;
+    highestQC(qc1, NullQC) = qc1;
+    highestQC(NullQC, NullQC) = NullQC;
+    max(viewNumber(qc1), viewNumber(qc2)) == viewNumber(qc1) -> highestQC(qc1, qc2) = qc1;
+    max(viewNumber(qc1), viewNumber(qc2)) == viewNumber(qc2) -> highestQC(qc1, qc2) = qc2;
+
+    %%%
+    % Function to check if the proposed node is safe, i.e., the node either extends lockedQC (safety rule) or
+    % highQC.viewNumber > lockedQC.viewNumber (liveness rule).
+    %
+    % @param nodeToCheck         the node whose safety is being checked
+    % @param qcLocked            the locked quorum certificate
+    % @param qcToCheck              the quorum certificate to check
+    %
+    % @return boolean value representing whether the node is safe (as defined in function spec) or not
+    %%%
+    (nodeToCheck == NullNode || qcLocked == NullQC || qcToCheck == NullQC) ->
+        safeNode(nodeToCheck, qcLocked, qcToCheck) = false;
+    safeNode(nodeToCheck, qcLocked, qcToCheck) =
+        extends(node(qcLocked), nodeToCheck) || (viewNumber(qcToCheck) > viewNumber(qcLocked));
+    
+    %%%
+    % Function to check if the message matches the required type and view number.
+    %                                                                                                                  
+    % @param messageToCheck      the message that needs to be checked
+    % @param expectedMsgType     the expected type of the message
+    % @param expectedViewNum     the expected view number of the message
+    %
+    % @return boolean value representing whether the message matches the details
+    %%%
+    (messageToCheck == NullMessage) -> matchingMessage(messageToCheck, expectedMsgType, expectedViewNum) = false;
+    matchingMessage(messageToCheck, expectedMsgType, expectedViewNum) =
+        (expectedMsgType == type(messageToCheck)) && (expectedViewNum == viewNumber(messageToCheck));
+
+    %%%
+    % Function to check if the QC matches the required type and view.
+    %                                                                                                                  
+    % @param QCToCheck           the QC that needs to be checked
+    % @param expectedMsgType     the expected message type of the QC
+    % @param expectedViewNum     the expected view number of the QC
+    %
+    % @return boolean value representing whether the QC matches the details
+    %%%
+    (QCToCheck == NullQC) -> matchingQC(QCToCheck, expectedMsgType, expectedViewNum) = false;
+    matchingQC(QCToCheck, expectedMsgType, expectedViewNum) =
+        (expectedMsgType == type(QCToCheck)) && (expectedViewNum == viewNumber(QCToCheck));
+
+act
+test: Bool;
+
+proc
+    checking =
+        test(extends(NullNode, NullNode)).delta;
+
+init 
+    allow({test},
+        checking
+    );
