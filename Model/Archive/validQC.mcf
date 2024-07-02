@@ -4,6 +4,3 @@
 [true*] forall msg3: Message, leader3: Pos . 
 val(type(msg1) != newView && type(msg1) == type(mJustify(msg3))) =>
 [broadcast_sent(msg3, leader3)] false
-
-
-
