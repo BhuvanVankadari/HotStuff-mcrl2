@@ -1,9 +1,6 @@
 [true*] forall msg1: Message, replica1, leader1: Pos .
-    [message_sent(msg1, replica1, leader1)] 
-
-    [true*] forall msg2: Message, replica2, leader2: Pos . 
-
-    val((replica1 != replica2) && (type(msg1) == commit) && (type(msg2) == commit) &&
-
-   (extends(node(msg1), node(msg2)) == false) && (extends(node(msg2), node(msg1)) == false)) =>
-   [message_sent(msg2, replica2, leader2)] mu Z. Z
+[message_sent(msg1, replica1, leader1)]
+[true*] forall msg2: Message, replica2, leader2: Pos .
+val((replica1 != replica2) && (type(msg1) == commit) && (type(msg2) == commit) &&
+    (extends(node(msg1), node(msg2)) == false) && (extends(node(msg2), node(msg1)) == false)) =>
+    [message_sent(msg2, replica2, leader2)] mu Z. Z

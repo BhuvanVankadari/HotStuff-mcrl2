@@ -1,4 +1,3 @@
-% if a timeout occurs a decision cannot be reached  in that state
 ([true*] forall viewNum1: Nat . [timeout(viewNum1)]
 [true*] forall viewNum2: Nat . val(viewNum1 == viewNum2) =>
 [execute_command(COMMAND_LIST.viewNum1, viewNum1)]false)
