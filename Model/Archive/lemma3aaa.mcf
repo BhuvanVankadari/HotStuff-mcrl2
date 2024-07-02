@@ -1,9 +1,0 @@
-[true*] forall replica1, leader1: Pos, msg1: Message .
-val(msg1.type == preCommit && replica1 != 4 && leader1 != 4) =>  [message_sent(msg1, replica1, leader1)]
-[true*] forall replica2, leader2: Pos, msg2: Message .
-val(msg2.type == preCommit && replica2 != 4 && replica2 != replica1 && msg2.viewNumber == msg1.viewNumber && msg2.node == msg1.node) =>  
-[message_sent(msg2, replica2, leader2)]
-[true*] exists replica3, leader3: Pos, msg3: Message . 
-val(msg3.type == commit && replica3 != 4 && msg3.viewNumber == msg1.viewNumber) => 
-[message_sent(msg3, replica3, leader3)]
-val(msg3.node == msg1.node)

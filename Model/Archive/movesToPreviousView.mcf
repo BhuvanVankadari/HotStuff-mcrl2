@@ -1,5 +1,0 @@
-[true*] forall leader1: Pos, phase1: MessageType, view1: Nat .
-    [phase_change_leader(leader1, phase1, view1)]
-[true*] forall leader2: Pos, phase2: MessageType, view2: Nat . 
-val(view1 == view2 && phase1 == phase2 && leader1 == leader2) =>
-    [phase_change_leader(leader2, phase2, view2)] false 
