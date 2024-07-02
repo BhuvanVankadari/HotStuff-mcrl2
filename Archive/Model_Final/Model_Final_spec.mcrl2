@@ -1,0 +1,10 @@
+sort
+    % Types of messages that can be generated within the protocol
+    MessageType = struct newView ? isNewView
+                        | generic ? isGeneric;
+    
+proc
+    leader(mapNodeToVotes, lastVotedHeight, )
+
+
+    replica 
